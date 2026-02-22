@@ -1,10 +1,6 @@
 package com.port2pullman.app.engine
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import android.location.LocationManager
-import androidx.core.content.ContextCompat
 import com.port2pullman.app.debug.DebugLog
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
@@ -88,10 +84,7 @@ object WeatherProvider {
 
     private suspend fun fetchWeather(context: Context) {
         try {
-            val (lat, lon) = getLocation(context) ?: run {
-                DebugLog.w(TAG, "No location available — cannot fetch weather")
-                return
-            }
+            val (lat, lon) = LocationProvider.getLatLon()
 
             val url = "$BASE_URL?latitude=$lat&longitude=$lon" +
                     "&current=temperature_2m,relative_humidity_2m,rain,snowfall,wind_speed_10m" +
@@ -116,35 +109,5 @@ object WeatherProvider {
         }
     }
 
-    @Suppress("MissingPermission")
-    private fun getLocation(context: Context): Pair<Double, Double>? {
-        val hasPerms = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.ACCESS_COARSE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasPerms) {
-            val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            if (lm != null) {
-                val providers = listOf(
-                    LocationManager.FUSED_PROVIDER,
-                    LocationManager.GPS_PROVIDER,
-                    LocationManager.NETWORK_PROVIDER,
-                    LocationManager.PASSIVE_PROVIDER,
-                )
-                for (provider in providers) {
-                    try {
-                        val loc = lm.getLastKnownLocation(provider)
-                        if (loc != null) return loc.latitude to loc.longitude
-                    } catch (_: Exception) { /* provider not available */ }
-                }
-            }
-        }
-
-        // Fallback: Pullman, WA — the app's namesake city
-        DebugLog.w(TAG, "No device location — using fallback (Pullman, WA)")
-        return FALLBACK_LAT to FALLBACK_LON
-    }
+    // Location is now sourced from LocationProvider singleton
 }

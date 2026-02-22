@@ -194,43 +194,20 @@ class DataSourceResolver(
 
     // ─── Location helpers ───────────────────────────────────────────
 
-    @Suppress("MissingPermission")
     private fun resolveLastLocation(): Pair<Double, Double>? {
         if (!hasPerm(Manifest.permission.ACCESS_FINE_LOCATION) &&
             !hasPerm(Manifest.permission.ACCESS_COARSE_LOCATION)) return null
-        val loc = getBestLocation()
-        if (loc != null) return loc.latitude to loc.longitude
-        // Fallback: Pullman, WA
-        return 46.7298 to -117.1817
+        return LocationProvider.getLatLon()
     }
 
-    @Suppress("MissingPermission")
     private fun resolveLocationAccuracy(): Float? {
         if (!hasPerm(Manifest.permission.ACCESS_FINE_LOCATION) &&
             !hasPerm(Manifest.permission.ACCESS_COARSE_LOCATION)) return null
-        return getBestLocation()?.accuracy ?: 1000f  // fallback ~1km
+        return LocationProvider.getAccuracy()
     }
 
-    /**
-     * Try every available location provider for the most recent fix.
-     * FUSED_PROVIDER is tried first (Google Play Services), then GPS,
-     * NETWORK, and finally PASSIVE.
-     */
-    @Suppress("MissingPermission")
-    private fun getBestLocation(): android.location.Location? {
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            ?: return null
-        val providers = listOf(
-            LocationManager.FUSED_PROVIDER,
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER,
-            LocationManager.PASSIVE_PROVIDER,
-        )
-        for (p in providers) {
-            try { lm.getLastKnownLocation(p)?.let { return it } } catch (_: Exception) {}
-        }
-        return null
-    }
+    // Location is now sourced from LocationProvider singleton
+    // which actively requests GPS updates.
 
     // ─── Utility ────────────────────────────────────────────────────
 

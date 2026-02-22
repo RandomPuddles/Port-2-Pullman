@@ -41,6 +41,7 @@ class AlarmEvaluatorService : Service() {
         triggerHistoryDao = app.triggerHistoryDao
         notificationController = NotificationController(this)
         evaluator = ConditionTreeEvaluator(this, triggerHistoryDao)
+        LocationProvider.start(this)
         createChannel()
         startForeground(NOTIFICATION_ID, buildForegroundNotification())
         startEvaluationLoop()
@@ -50,6 +51,7 @@ class AlarmEvaluatorService : Service() {
 
     override fun onDestroy() {
         DebugLog.i("EvalService", "Service onDestroy")
+        LocationProvider.stop(this)
         scope.cancel()
         super.onDestroy()
     }
