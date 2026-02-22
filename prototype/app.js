@@ -293,7 +293,8 @@ function renderConditions() {
     block.className = 'condition-block';
     block.dataset.condIndex = i;
 
-    let inner = `<span class="condition-text">${esc(cond.title)}`;
+    let inner = `<div class="drag-handle" draggable="false" data-dragidx="${i}"><div class="drag-dots"><span></span><span></span><span></span><span></span><span></span><span></span></div></div>`;
+    inner += `<span class="condition-text">${esc(cond.title)}`;
     if (cond.hasNum) {
       const val = cond.value != null ? cond.value : '—';
       inner += `</span><button class="condition-numval" data-numidx="${i}">${val} ${esc(cond.unit || '')}</button>`;
@@ -303,6 +304,14 @@ function renderConditions() {
     inner += `<button class="condition-remove" data-remidx="${i}"><span class="material-icons-round">close</span></button>`;
 
     block.innerHTML = inner;
+
+    // Drag reorder via handle
+    const handle = block.querySelector('.drag-handle');
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startConditionDrag(i, block, e);
+    });
 
     // Modify condition (tap on text area to browse for replacement)
     block.querySelector('.condition-text').addEventListener('click', () => {
@@ -327,6 +336,71 @@ function renderConditions() {
 
     container.appendChild(block);
   });
+}
+
+// ─── Condition Drag Reorder ───────────────────────────────────
+let dragCondIndex = null;
+let dragCondBlock = null;
+
+function startConditionDrag(idx, block, startEvt) {
+  dragCondIndex = idx;
+  dragCondBlock = block;
+  block.classList.add('dragging');
+  block.setPointerCapture(startEvt.pointerId);
+
+  const container = $('#conditions-container');
+
+  function onMove(e) {
+    // Find which condition block we're over
+    const els = container.querySelectorAll('.condition-block');
+    for (const el of els) {
+      const rect = el.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        el.classList.add('drag-over');
+      } else {
+        el.classList.remove('drag-over');
+      }
+    }
+  }
+
+  function onUp(e) {
+    block.releasePointerCapture(e.pointerId);
+    block.removeEventListener('pointermove', onMove);
+    block.removeEventListener('pointerup', onUp);
+    block.classList.remove('dragging');
+
+    // Find drop target
+    const els = [...container.querySelectorAll('.condition-block')];
+    let targetIdx = dragCondIndex;
+    for (const el of els) {
+      el.classList.remove('drag-over');
+      const rect = el.getBoundingClientRect();
+      if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        targetIdx = parseInt(el.dataset.condIndex);
+      }
+    }
+
+    if (targetIdx !== dragCondIndex) {
+      // Reorder conditions and operators
+      const cond = editState.conditions.splice(dragCondIndex, 1)[0];
+      editState.conditions.splice(targetIdx, 0, cond);
+      // Rebuild operators array to match (keep values, adjust length)
+      while (editState.operators.length < editState.conditions.length - 1) {
+        editState.operators.push('AND');
+      }
+      while (editState.operators.length > Math.max(0, editState.conditions.length - 1)) {
+        editState.operators.pop();
+      }
+      renderConditions();
+    }
+
+    dragCondIndex = null;
+    dragCondBlock = null;
+  }
+
+  block.addEventListener('pointermove', onMove);
+  block.addEventListener('pointerup', onUp);
 }
 
 // ─── Add Condition ───────────────────────────────────────────
@@ -663,6 +737,8 @@ $('#btn-create-custom-cond').addEventListener('click', () => {
   $('#custom-cond-popup-title').textContent = 'Create Custom Condition';
   $('#custom-cond-title').value = '';
   $('#custom-cond-stmt').value = '';
+  $('#custom-cond-freq-val').value = '';
+  $('#custom-cond-freq-unit').value = 'minutes';
   manageCustomIndex = null;
   showPopup('popup-custom-cond');
   setTimeout(() => $('#custom-cond-title').focus(), 100);
@@ -678,7 +754,14 @@ $('#btn-custom-cond-save').addEventListener('click', () => {
   const stmt = $('#custom-cond-stmt').value.trim();
   if (!title) return;
 
-  const cond = { title: title + (stmt ? `: ${stmt}` : ''), hasNum: false, custom: true };
+  const freqVal = parseInt($('#custom-cond-freq-val').value);
+  const freqUnit = $('#custom-cond-freq-unit').value;
+  const cond = {
+    title: title + (stmt ? `: ${stmt}` : ''),
+    hasNum: false,
+    custom: true,
+    refreshFreq: !isNaN(freqVal) && freqVal > 0 ? { value: freqVal, unit: freqUnit } : null,
+  };
 
   if (manageCustomIndex != null) {
     // Modify existing
@@ -705,6 +788,13 @@ $('#btn-modify-custom').addEventListener('click', () => {
   $('#custom-cond-popup-title').textContent = 'Modify Custom Condition';
   $('#custom-cond-title').value = parts[0] || '';
   $('#custom-cond-stmt').value = parts.slice(1).join(': ') || '';
+  if (cond.refreshFreq) {
+    $('#custom-cond-freq-val').value = cond.refreshFreq.value;
+    $('#custom-cond-freq-unit').value = cond.refreshFreq.unit;
+  } else {
+    $('#custom-cond-freq-val').value = '';
+    $('#custom-cond-freq-unit').value = 'minutes';
+  }
   showPopup('popup-custom-cond');
 });
 

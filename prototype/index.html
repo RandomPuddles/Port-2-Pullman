@@ -226,6 +226,16 @@
         <input id="custom-cond-title" class="setup-input" type="text" placeholder="e.g. Battery Low" />
         <label class="popup-label" for="custom-cond-stmt">Condition Statement</label>
         <input id="custom-cond-stmt" class="setup-input" type="text" placeholder="e.g. Battery level < 20%" />
+        <label class="popup-label">Refresh Frequency</label>
+        <div class="refresh-freq-row">
+          <input id="custom-cond-freq-val" class="setup-input" type="number" placeholder="e.g. 5" min="1" />
+          <select id="custom-cond-freq-unit">
+            <option value="seconds">Seconds</option>
+            <option value="minutes" selected>Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days">Days</option>
+          </select>
+        </div>
         <button id="btn-custom-cond-save" class="primary-btn">Save Condition</button>
       </div>
     </div>
