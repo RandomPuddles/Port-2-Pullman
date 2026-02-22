@@ -33,6 +33,7 @@ object ConditionMeta {
         "day_of_week" to Meta(false),
         "date_is" to Meta(false),
         "minutes_from_now" to Meta(true, "min"),
+        "seconds_from_now" to Meta(true, "sec"),
         "arrive_at" to Meta(false),
         "leave_location" to Meta(false),
         "within_radius" to Meta(true, "mi"),

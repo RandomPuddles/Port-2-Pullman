@@ -48,12 +48,13 @@ class DeviceEvaluator : ConditionEvaluator {
 /** Evaluates time and date conditions — fully implemented. */
 class TimeEvaluator : ConditionEvaluator {
     override val supportedTypes = setOf(
-        "time_is", "day_of_week", "date_is", "minutes_from_now"
+        "time_is", "day_of_week", "date_is", "minutes_from_now", "seconds_from_now"
     )
 
     override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         return when (condition.type) {
             "minutes_from_now" -> evaluateMinutesFromNow(condition, alarmStartedAt)
+            "seconds_from_now" -> evaluateSecondsFromNow(condition, alarmStartedAt)
             "time_is" -> evaluateTimeIs(condition)
             "day_of_week" -> evaluateDayOfWeek(condition)
             else -> {
@@ -78,6 +79,25 @@ class TimeEvaluator : ConditionEvaluator {
             "TimeEval",
             "minutes_from_now: value=${minutes}m, startedAt=${alarmStartedAt}, " +
                     "target=$targetTime, now=$now, remaining=${remainingMs / 1000}s, triggered=$triggered"
+        )
+        return triggered
+    }
+
+    private fun evaluateSecondsFromNow(condition: LeafCondition, alarmStartedAt: Long): Boolean {
+        val seconds = when (val v = condition.value) {
+            is Number -> v.toDouble()
+            is String -> v.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+        val targetTime = alarmStartedAt + (seconds * 1_000L).toLong()
+        val now = System.currentTimeMillis()
+        val remainingMs = targetTime - now
+        val triggered = now >= targetTime
+
+        DebugLog.d(
+            "TimeEval",
+            "seconds_from_now: value=${seconds}s, startedAt=${alarmStartedAt}, " +
+                    "target=$targetTime, now=$now, remaining=${remainingMs}ms, triggered=$triggered"
         )
         return triggered
     }

@@ -42,6 +42,7 @@ class ConditionRepositoryImpl(
                 LeafCondition("time", "day_of_week", "Day of week is"),
                 LeafCondition("time", "date_is", "Date is"),
                 LeafCondition("time", "minutes_from_now", "Minutes from now"),
+                LeafCondition("time", "seconds_from_now", "Seconds from now"),
             )
         ),
         Category(
