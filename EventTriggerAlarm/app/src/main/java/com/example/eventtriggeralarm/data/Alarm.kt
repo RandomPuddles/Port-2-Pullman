@@ -17,7 +17,10 @@ data class ConditionItem(
     val unit: String? = null,
     val value: Double? = null,
     val custom: Boolean = false,
-    val refreshFreq: RefreshFreq? = null
+    val refreshFreq: RefreshFreq? = null,
+    /** For Location/Weather conditions. Used when building domain Condition tree. */
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 data class RefreshFreq(
