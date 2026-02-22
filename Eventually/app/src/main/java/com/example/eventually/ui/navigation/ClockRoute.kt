@@ -7,4 +7,6 @@ sealed class ClockRoute(val route: String) {
     data object Stopwatch : ClockRoute("stopwatch")
     data object Timer : ClockRoute("timer")
     data object Event : ClockRoute("event")
+    data object EventAdd : ClockRoute("event_add")
+    data object EventEdit : ClockRoute("event_edit/{eventId}")
 }
