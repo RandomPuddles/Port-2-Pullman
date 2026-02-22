@@ -1,0 +1,34 @@
+# ─── Android / Gradle ─────────────────────────────────────
+.gradle/
+build/
+local.properties
+*.iml
+
+# ─── Android Studio / IntelliJ ───────────────────────────
+.idea/
+*.ipr
+*.iws
+
+# ─── Kotlin ──────────────────────────────────────────────
+*.class
+*.jar
+*.war
+*.log
+
+# ─── Native / NDK ────────────────────────────────────────
+.externalNativeBuild/
+.cxx/
+
+# ─── Keystores & secrets ──────────────────────────────────
+*.keystore
+*.jks
+secrets.properties
+
+# ─── OS ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Misc ────────────────────────────────────────────────
+*.apk
+*.aab
+captures/
