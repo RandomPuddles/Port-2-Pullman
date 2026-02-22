@@ -31,6 +31,7 @@ UI -> UI : navigate to CategoryScreen
 note right : returns Condition via\nCompose navigation result
 
 UI -> VM : addCondition(selectedCondition)
+note right : selectedCondition is a LeafCondition;\nadded as child of root CompositeCondition
 
 == Edit Existing Alarm ==
 
@@ -44,7 +45,8 @@ deactivate VM
 == Modify Condition ==
 
 User -> UI : tap bool-op chip (AND/OR)
-UI -> VM : setOperator(index, OR)
+UI -> VM : setOperator(OR)
+note right : Sets root CompositeCondition.operator\n(applies to all top-level children)
 
 User -> UI : tap numerical value badge
 UI -> VM : setNumericalValue(index, 70)

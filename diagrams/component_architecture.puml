@@ -68,13 +68,13 @@ package "AI Alarm Creator  (Compose · Gemini SDK)" as PKG_AI {
 }
 
 package "Alarm Storage  (Room · Moshi · DataStore)" as PKG_STORAGE {
-  component [AlarmRepositoryImpl\n──────────────────\nRoom + Flow · upsert / delete\nbulk setEnabled\nMoshi: conditions ↔ JSON] as AlarmRepoImpl
+  component [AlarmRepositoryImpl\n──────────────────\nRoom + Flow · upsert / delete\nbulk setEnabled\nMoshi: condition tree ↔ JSON] as AlarmRepoImpl
   component [ConditionRepositoryImpl\n─────────────────────\nBuilt-in: static list\nCustom: Room + Flow\nRefreshFreq via Moshi] as CondRepoImpl
   component [RoomDatabase\n────────────\nalarms · custom_conditions\nAlarmDao · ConditionDao] as RoomDB
 }
 
 package "Alarm Engine  (Service · Coroutines · Ktor)" as PKG_ENGINE {
-  component [AlarmEvaluatorService\n─────────────────────\nForeground Service\nCoroutine per enabled alarm\nAND / OR operator logic] as EvalSvc
+  component [AlarmEvaluatorService\n─────────────────────\nForeground Service\nCoroutine per enabled alarm\nAND / OR operator logic\nRecursive tree evaluation] as EvalSvc
   component [ConditionEvaluators\n───────────────────\nStrategy per type:\nWeather · Device · Time\nLocation · Schedule · Custom] as CondEvals
   component [NotificationController\n────────────────────\nRing → MediaPlayer loop\nReadout → TextToSpeech\nPing → NotificationCompat] as NotifCtrl
   component [ExternalDataFetcher\n───────────────────\nKtor GET: Weather · Location\nCached per refreshFreq] as ExtFetch
@@ -145,9 +145,10 @@ note bottom of IAlarmRepo
   ────────────────────────
   · setEnabled accepts List for both
     single-toggle and bulk select-mode
-  · Alarm stores conditions as an ordered
-    JSON array via Moshi; condition order
-    and drag-reorder are persisted via upsert
+  · Alarm stores rootCondition as a
+    polymorphic JSON tree via Moshi
+    (sealed Condition → LeafCondition
+    + CompositeCondition)
   · Flow keeps UI reactive
 end note
 
@@ -170,9 +171,9 @@ note bottom of RoomDB
   **Room Schema**
   ────────────────────────
   AlarmEntity:
-    id · title · conditionsJson
-    operatorsJson · readout · ring
-    triggerOnce · enabled
+    id · title · conditionTreeJson
+    readout · ring · triggerOnce
+    enabled
   CustomConditionEntity:
     id · title · statement
     refreshFreqJson

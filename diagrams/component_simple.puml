@@ -32,7 +32,7 @@ package "Home Screen" as PKG_HOME {
 }
 
 package "Alarm Setup" as PKG_SETUP {
-  component [Alarm Editor\n─────────────\nTitle · Condition blocks\nBool operators (AND / OR)\nNumerical value · Drag reorder\nReadout · Ring · Trigger Once] as AlarmEditor
+  component [Alarm Editor\n─────────────\nTitle · Condition blocks\nBool operators (AND / OR)\nNumerical value · Drag reorder\nReadout · Ring · Trigger Once\nComposite condition tree] as AlarmEditor
 }
 
 package "Condition Browser" as PKG_BROWSER {
@@ -49,12 +49,12 @@ package "AI Alarm Creator" as PKG_AI {
 }
 
 package "Alarm Storage" as PKG_STORAGE {
-  component [Alarm Repository\n─────────────\nSave · Load · Delete alarms\nEnable / Disable (single & bulk)\nPersist condition order] as AlarmRepo
+  component [Alarm Repository\n─────────────\nSave · Load · Delete alarms\nEnable / Disable (single & bulk)\nPersist condition tree (Composite)] as AlarmRepo
   component [Condition Repository\n─────────────\nBuilt-in category catalogue\nCustom condition CRUD] as CondRepo
 }
 
 package "Alarm Engine  (background)" as PKG_ENGINE {
-  component [Condition Evaluator\n─────────────\nPer-type checks:\nWeather · Device · Time\nLocation · Schedule · Custom\nRespects AND / OR] as Evaluator
+  component [Condition Evaluator\n─────────────\nRecursive tree evaluation:\nCompositeCondition → AND / OR\nLeafCondition → per-type checks:\nWeather · Device · Time\nLocation · Schedule · Custom] as Evaluator
   component [Notification Controller\n─────────────\nPing · Ring · Readout (TTS)\nTrigger Once → auto-disable] as Notifier
 }
 

@@ -94,8 +94,7 @@ interface ConditionDao <<@Dao>> {
 class AlarmEntity <<@Entity>> {
   + id : Long  <<PK>>
   + title : String
-  + conditionsJson : String
-  + operatorsJson : String
+  + conditionTreeJson : String
   + readout : Boolean
   + ring : Boolean
   + triggerOnce : Boolean
@@ -117,14 +116,12 @@ class MoshiModule {
   + provideMoshi(): Moshi
 }
 
-class ConditionListAdapter <<@JsonAdapter>> {
-  + toJson(conditions: List<Condition>): String
-  + fromJson(json: String): List<Condition>
-}
-
-class OperatorListAdapter <<@JsonAdapter>> {
-  + toJson(ops: List<Operator>): String
-  + fromJson(json: String): List<Operator>
+class ConditionTreeAdapter <<@JsonAdapter>> {
+  + toJson(root: Condition): String
+  + fromJson(json: String): Condition
+  ' Polymorphic: sealed Condition
+  '   └─ LeafCondition
+  '   └─ CompositeCondition
 }
 
 class RefreshFrequencyAdapter <<@JsonAdapter>> {
@@ -150,8 +147,7 @@ AppDatabase ..> ConditionDao : provides
 AlarmDao ..> AlarmEntity : CRUD
 ConditionDao ..> CustomConditionEntity : CRUD
 
-MoshiModule ..> ConditionListAdapter : registers
-MoshiModule ..> OperatorListAdapter : registers
+MoshiModule ..> ConditionTreeAdapter : registers
 MoshiModule ..> RefreshFrequencyAdapter : registers
 
 @enduml

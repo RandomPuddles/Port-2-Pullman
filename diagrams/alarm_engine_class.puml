@@ -27,7 +27,7 @@ class AlarmEvaluatorService <<ForegroundService>> {
   --
   - observeEnabledAlarms()
   - launchEvalLoop(alarm: Alarm)
-  - evaluateAlarm(alarm: Alarm): Boolean
+  - evaluateTree(condition: Condition): Boolean
   - handleTrigger(alarm: Alarm)
 }
 
@@ -36,35 +36,35 @@ class AlarmEvaluatorService <<ForegroundService>> {
 ' ───────────────────────────────────
 
 interface ConditionEvaluator <<interface>> {
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 class WeatherEvaluator {
   - fetcher : ExternalDataFetcher
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 class DeviceEvaluator {
   - context : Context
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 class TimeEvaluator {
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 class LocationEvaluator {
   - fetcher : ExternalDataFetcher
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 class ScheduleEvaluator {
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 class CustomEvaluator {
   - fetcher : ExternalDataFetcher
-  + evaluate(condition: Condition): suspend Boolean
+  + evaluate(leaf: LeafCondition): suspend Boolean
 }
 
 ' ───────────────────────────────────

@@ -24,10 +24,8 @@ DB --> ADao : Flow<List<AlarmEntity>>
 ADao --> AlarmRepo : Flow<List<AlarmEntity>>
 
 loop each entity in Flow emission
-  AlarmRepo -> Moshi : fromJson(conditionsJson)
-  Moshi --> AlarmRepo : List<Condition>
-  AlarmRepo -> Moshi : fromJson(operatorsJson)
-  Moshi --> AlarmRepo : List<Operator>
+  AlarmRepo -> Moshi : fromJson(conditionTreeJson)
+  Moshi --> AlarmRepo : Condition (sealed tree)
   AlarmRepo -> AlarmRepo : map to Alarm
 end
 
@@ -36,10 +34,9 @@ AlarmRepo --> Caller : Flow<List<Alarm>>
 == Upsert Alarm ==
 
 Caller -> AlarmRepo : upsert(alarm)
-AlarmRepo -> Moshi : toJson(alarm.conditions)
-Moshi --> AlarmRepo : conditionsJson
-AlarmRepo -> Moshi : toJson(alarm.operators)
-Moshi --> AlarmRepo : operatorsJson
+AlarmRepo -> Moshi : toJson(alarm.rootCondition)
+Moshi --> AlarmRepo : conditionTreeJson
+note right : Polymorphic Moshi adapter serializes\nsealed Condition tree (Leaf + Composite)
 AlarmRepo -> AlarmRepo : build AlarmEntity
 AlarmRepo -> ADao : upsert(entity)
 ADao -> DB : INSERT OR REPLACE

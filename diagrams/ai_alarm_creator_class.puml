@@ -68,8 +68,7 @@ class GenerateContentResponse <<external>> {
 
 class AlarmDraft <<data class>> {
   + title : String
-  + conditions : List<Condition>
-  + operators : List<Operator>
+  + rootCondition : CompositeCondition
   + readout : Boolean
   + ring : Boolean
   + triggerOnce : Boolean

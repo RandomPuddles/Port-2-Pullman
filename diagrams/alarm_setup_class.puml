@@ -25,7 +25,7 @@ class SetupScreen <<@Composable>> {
   + onAddConditionClick()
   + onRemoveCondition(index: Int)
   + onReorderConditions(from: Int, to: Int)
-  + onSetBoolOperator(index: Int, op: Operator)
+  + onSetOperator(op: Operator)
   + onSetNumericalValue(index: Int, value: Any)
   + onToggleReadout(on: Boolean)
   + onToggleRing(on: Boolean)
@@ -47,10 +47,10 @@ class SetupViewModel {
   + loadAlarm(id: Long)
   + loadDraft(draft: AlarmDraft)
   + updateTitle(title: String)
-  + addCondition(c: Condition)
+  + addCondition(c: LeafCondition)
   + removeCondition(index: Int)
   + reorderConditions(from: Int, to: Int)
-  + setOperator(index: Int, op: Operator)
+  + setOperator(op: Operator)
   + setNumericalValue(index: Int, value: Any)
   + setReadout(on: Boolean)
   + setRing(on: Boolean)
@@ -75,18 +75,24 @@ interface IAlarmRepository <<interface>> {
 
 class AlarmDraft <<data class>> {
   + title : String
-  + conditions : List<Condition>
-  + operators : List<Operator>
+  + rootCondition : CompositeCondition
   + readout : Boolean
   + ring : Boolean
   + triggerOnce : Boolean
 }
 
-class Condition <<data class>> {
+abstract class Condition <<sealed>>
+
+class LeafCondition <<data class>> {
   + category : String
   + type : String
   + label : String
   + value : Any?
+}
+
+class CompositeCondition <<data class>> {
+  + operator : Operator
+  + children : List<Condition>
 }
 
 enum Operator {
@@ -101,7 +107,10 @@ enum Operator {
 SetupScreen --> SetupViewModel : observes StateFlow
 SetupViewModel --> IAlarmRepository : save · load · delete
 SetupViewModel ..> AlarmDraft : manages
-AlarmDraft o-- "0..*" Condition : ordered list
-AlarmDraft o-- "0..*" Operator : between conditions
+AlarmDraft *-- CompositeCondition : rootCondition
+Condition <|-- LeafCondition
+Condition <|-- CompositeCondition
+CompositeCondition o-- "0..*" Condition : children
+CompositeCondition --> Operator
 
 @enduml

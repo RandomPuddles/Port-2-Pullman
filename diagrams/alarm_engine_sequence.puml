@@ -26,10 +26,12 @@ note right : Filters to enabled alarms.\nLaunches a coroutine per alarm.
 == Evaluation Loop (per alarm) ==
 
 loop every alarm.refreshInterval
-  Svc -> Svc : evaluateAlarm(alarm)
+  Svc -> Svc : evaluateTree(alarm.rootCondition)
 
-  loop each condition in alarm.conditions
-    Svc -> Eval : evaluate(condition)
+  note right : Recursive Composite Pattern traversal:\n  CompositeCondition → AND/OR its children\n  LeafCondition → dispatch to strategy evaluator
+
+  loop each leaf in tree (recursive)
+    Svc -> Eval : evaluate(leafCondition)
     activate Eval
 
     alt Weather / Location / Custom
@@ -54,7 +56,7 @@ loop every alarm.refreshInterval
     deactivate Eval
   end
 
-  Svc -> Svc : combine results with\nAND / OR operators
+  Svc -> Svc : combine leaf results per\nCompositeCondition operator (AND/OR)
 end
 
 == Alarm Triggered ==

@@ -31,7 +31,7 @@ CatUI -> PickUI : navigate(category = Weather)
 PickUI -> PickUI : display conditions in category
 
 User -> PickUI : tap "Temperature > X"
-PickUI -> PickUI : return Condition to SetupScreen\nvia Compose navigation result
+PickUI -> PickUI : return LeafCondition to SetupScreen\nvia Compose navigation result
 
 == Create Custom Condition ==
 

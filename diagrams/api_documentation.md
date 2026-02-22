@@ -34,14 +34,15 @@ These are the cross-package contracts that connect UI, Storage, and Engine packa
 | **getAll** | `fun getAll(): Flow<List<Alarm>>` | Returns a reactive stream of all alarms, ordered by creation date descending. Emits a new list whenever the underlying data changes. |
 | **search** | `fun search(query: String): Flow<List<Alarm>>` | Filters alarms where `title` or any condition text contains `query` (case-insensitive). Returns a reactive `Flow`. |
 | **getById** | `fun getById(id: Long): Flow<Alarm?>` | Returns a reactive stream for a single alarm. Emits `null` if the alarm does not exist or is deleted. |
-| **upsert** | `suspend fun upsert(alarm: Alarm): Long` | Inserts a new alarm or updates an existing one (matched by `id`). Returns the row ID. Conditions are persisted as an ordered JSON array via Moshi — drag-to-reorder changes are saved by passing the reordered list here. |
+| **upsert** | `suspend fun upsert(alarm: Alarm): Long` | Inserts a new alarm or updates an existing one (matched by `id`). Returns the row ID. The condition tree (Composite Pattern) is persisted as a polymorphic JSON tree via Moshi — drag-to-reorder changes are saved by passing the reordered tree here. |
 | **delete** | `suspend fun delete(ids: List<Long>): Unit` | Deletes one or more alarms by ID. Accepts a list to support bulk delete from select mode. |
 | **setEnabled** | `suspend fun setEnabled(ids: List<Long>, on: Boolean): Unit` | Enables or disables one or more alarms. Accepts a list to support both single-toggle and bulk select-mode operations without calling in a loop. |
 
 #### Usage Notes
 
 - All `Flow` methods are collected by ViewModels via `viewModelScope` and exposed as `StateFlow` to Compose UI.
-- `upsert` is the single write path for both create and edit — there is no separate `reorderConditions` method; condition order is part of the `Alarm` object.
+- `upsert` is the single write path for both create and edit — there is no separate `reorderConditions` method; the condition tree (with ordering) is part of the `Alarm` object.
+- The Engine evaluates the `Alarm.rootCondition` tree recursively — `CompositeCondition` applies its operator (AND/OR) across children, `LeafCondition` checks a single data point.
 - The Engine calls `setEnabled(listOf(id), false)` to auto-disable trigger-once alarms after they fire.
 
 ---
@@ -114,27 +115,33 @@ val draft = moshi.adapter(AlarmDraft::class.java).fromJson(json)
 ```json
 {
   "title": "Sunny Warm Weekday",
-  "conditions": [
-    {
-      "category": "weather",
-      "type": "weather_condition",
-      "label": "Weather is Sunny",
-      "value": "sunny"
-    },
-    {
-      "category": "weather",
-      "type": "temperature_above",
-      "label": "Temperature > 70°F",
-      "value": 70
-    },
-    {
-      "category": "recurring",
-      "type": "day_of_week",
-      "label": "Monday–Friday",
-      "value": [1, 2, 3, 4, 5]
-    }
-  ],
-  "operators": ["AND", "AND"],
+  "rootCondition": {
+    "type": "composite",
+    "operator": "AND",
+    "children": [
+      {
+        "type": "leaf",
+        "category": "weather",
+        "conditionType": "weather_condition",
+        "label": "Weather is Sunny",
+        "value": "sunny"
+      },
+      {
+        "type": "leaf",
+        "category": "weather",
+        "conditionType": "temperature_above",
+        "label": "Temperature > 70°F",
+        "value": 70
+      },
+      {
+        "type": "leaf",
+        "category": "recurring",
+        "conditionType": "day_of_week",
+        "label": "Monday–Friday",
+        "value": [1, 2, 3, 4, 5]
+      }
+    ]
+  },
   "readout": false,
   "ring": true,
   "triggerOnce": false
@@ -144,8 +151,7 @@ val draft = moshi.adapter(AlarmDraft::class.java).fromJson(json)
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | `String` | Suggested alarm title. |
-| `conditions` | `Condition[]` | Ordered list of conditions (see [Condition](#condition) model). |
-| `operators` | `String[]` | Boolean operators between conditions. Length = `conditions.length - 1`. Values: `"AND"` or `"OR"`. |
+| `rootCondition` | `Condition` | Condition tree root (see [Condition hierarchy](#condition-sealed-hierarchy)). Typically a `CompositeCondition` with `LeafCondition` children. |
 | `readout` | `Boolean` | Whether TTS should read the title aloud when triggered. |
 | `ring` | `Boolean` | Whether an audio alarm loop should play when triggered. |
 | `triggerOnce` | `Boolean` | Whether the alarm auto-disables after the first trigger. |
@@ -251,7 +257,7 @@ Retrieve the device's current location (used by location-based conditions). May 
 
 ## 3. Data Models
 
-All models are Kotlin `data class` types serialized via Moshi.
+All models are Kotlin types serialized via Moshi (polymorphic adapters for sealed hierarchy).
 
 ### Alarm
 
@@ -259,8 +265,7 @@ All models are Kotlin `data class` types serialized via Moshi.
 data class Alarm(
     val id: Long = 0,
     val title: String,
-    val conditions: List<Condition>,
-    val operators: List<Operator>,
+    val rootCondition: Condition,
     val readout: Boolean = false,
     val ring: Boolean = false,
     val triggerOnce: Boolean = false,
@@ -275,24 +280,34 @@ Identical structure to `Alarm` but without `id` or `enabled` — used as the AI 
 ```kotlin
 data class AlarmDraft(
     val title: String,
-    val conditions: List<Condition>,
-    val operators: List<Operator>,
+    val rootCondition: Condition,
     val readout: Boolean,
     val ring: Boolean,
     val triggerOnce: Boolean
 )
 ```
 
-### Condition
+### Condition (sealed hierarchy)
+
+Uses the **Composite Pattern**. `Condition` is a sealed class with two subtypes:
 
 ```kotlin
-data class Condition(
+sealed class Condition
+
+data class LeafCondition(
     val category: String,
     val type: String,
     val label: String,
     val value: Any?
-)
+) : Condition()
+
+data class CompositeCondition(
+    val operator: Operator,
+    val children: List<Condition>
+) : Condition()
 ```
+
+#### LeafCondition
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -300,6 +315,15 @@ data class Condition(
 | `type` | `String` | Condition subtype identifier (e.g., `"temperature_above"`, `"battery_below"`). |
 | `label` | `String` | Human-readable display text. |
 | `value` | `Any?` | Numerical threshold, string keyword, list of days, etc. Type depends on `type`. |
+
+#### CompositeCondition
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `operator` | `Operator` | `AND` or `OR` — applied across all `children`. |
+| `children` | `List<Condition>` | Ordered list of child conditions (leaf or nested composite). Supports arbitrarily deep nesting. |
+
+> **UI mapping:** The Setup Screen displays the `children` of the root `CompositeCondition` as a flat ordered list with drag-to-reorder. The bool-op chips between blocks set the root's `operator`. Nesting is possible but the initial UI keeps it flat (single-level composite).
 
 ### CustomCondition
 
@@ -338,7 +362,7 @@ enum class Operator {
 ```kotlin
 data class Category(
     val name: String,
-    val conditions: List<Condition>
+    val conditions: List<LeafCondition>
 )
 ```
 
@@ -352,8 +376,7 @@ data class Category(
 |--------|------|-------------|-------------|
 | `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | Unique alarm identifier. |
 | `title` | `TEXT` | `NOT NULL` | Alarm display title. |
-| `conditionsJson` | `TEXT` | `NOT NULL` | Ordered `List<Condition>` serialized via Moshi. |
-| `operatorsJson` | `TEXT` | `NOT NULL` | `List<Operator>` serialized via Moshi. Length = conditions count − 1. |
+| `conditionTreeJson` | `TEXT` | `NOT NULL` | Polymorphic `Condition` tree (Composite Pattern) serialized via Moshi. Contains nested `LeafCondition` and `CompositeCondition` nodes with embedded operators. |
 | `readout` | `INTEGER` | `NOT NULL DEFAULT 0` | `1` = TTS reads title aloud on trigger. |
 | `ring` | `INTEGER` | `NOT NULL DEFAULT 0` | `1` = audio alarm loop on trigger. |
 | `triggerOnce` | `INTEGER` | `NOT NULL DEFAULT 0` | `1` = auto-disable after first trigger. |

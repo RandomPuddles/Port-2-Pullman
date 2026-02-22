@@ -69,12 +69,34 @@ interface IAlarmRepository <<interface>> {
 class Alarm <<data class>> {
   + id : Long
   + title : String
-  + conditions : List<Condition>
-  + operators : List<Operator>
+  + rootCondition : Condition
   + readout : Boolean
   + ring : Boolean
   + triggerOnce : Boolean
   + enabled : Boolean
+}
+
+' ───────────────────────────────────
+'  Condition Hierarchy (Composite Pattern)
+' ───────────────────────────────────
+
+abstract class Condition <<sealed>>
+
+class LeafCondition <<data class>> {
+  + category : String
+  + type : String
+  + label : String
+  + value : Any?
+}
+
+class CompositeCondition <<data class>> {
+  + operator : Operator
+  + children : List<Condition>
+}
+
+enum Operator {
+  AND
+  OR
 }
 
 ' ───────────────────────────────────
@@ -84,5 +106,10 @@ class Alarm <<data class>> {
 HomeScreen --> AlarmListViewModel : observes StateFlow
 AlarmListViewModel --> IAlarmRepository : delegates
 AlarmListViewModel ..> Alarm : exposes
+Alarm *-- Condition : rootCondition
+Condition <|-- LeafCondition
+Condition <|-- CompositeCondition
+CompositeCondition o-- "0..*" Condition : children
+CompositeCondition --> Operator
 
 @enduml

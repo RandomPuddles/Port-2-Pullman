@@ -22,9 +22,9 @@ class CategoryScreen <<@Composable>> {
 }
 
 class ConditionPickerScreen <<@Composable>> {
-  - conditions : List<Condition>
+  - conditions : List<LeafCondition>
   - categoryName : String
-  + onConditionTap(c: Condition)
+  + onConditionTap(c: LeafCondition)
   + onModifyCustom(c: CustomCondition)
   + onDeleteCustom(id: Long)
 }
@@ -72,10 +72,10 @@ interface IConditionRepository <<interface>> {
 
 class Category <<data class>> {
   + name : String
-  + conditions : List<Condition>
+  + conditions : List<LeafCondition>
 }
 
-class Condition <<data class>> {
+class LeafCondition <<data class>> {
   + category : String
   + type : String
   + label : String
@@ -110,7 +110,7 @@ ConditionPickerScreen --> ConditionBrowserViewModel : observes
 CustomConditionDialog --> ConditionBrowserViewModel : CRUD
 ConditionBrowserViewModel --> IConditionRepository : delegates
 
-Category o-- "0..*" Condition
+Category o-- "0..*" LeafCondition
 CustomCondition *-- RefreshFrequency
 RefreshFrequency --> TimeUnit
 
