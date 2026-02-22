@@ -22,6 +22,9 @@ interface AlarmDao {
 
     @Query("UPDATE alarms SET enabled = :on, lastStartedAt = CASE WHEN :on = 1 THEN :now ELSE lastStartedAt END WHERE id IN (:ids)")
     suspend fun setEnabled(ids: List<Long>, on: Boolean, now: Long = System.currentTimeMillis())
+
+    @Query("UPDATE alarms SET lastStartedAt = :now WHERE id = :id")
+    suspend fun resetLastStartedAt(id: Long, now: Long = System.currentTimeMillis())
 }
 
 @Dao

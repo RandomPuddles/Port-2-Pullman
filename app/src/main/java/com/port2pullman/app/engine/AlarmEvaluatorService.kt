@@ -101,6 +101,10 @@ class AlarmEvaluatorService : Service() {
             if (triggered) {
                 DebugLog.i("EvalService", "TRIGGERED: '${alarm.title}'")
                 notificationController.showTriggered(alarm)
+                // Reset the reference time so time-based conditions
+                // don't keep triggering on every evaluation cycle
+                alarmRepo.resetLastStartedAt(alarm.id)
+                DebugLog.d("EvalService", "Reset lastStartedAt for alarm ${alarm.id}")
                 if (alarm.triggerOnce) {
                     DebugLog.d("EvalService", "triggerOnce - disabling alarm ${alarm.id}")
                     alarmRepo.setEnabled(listOf(alarm.id), false)

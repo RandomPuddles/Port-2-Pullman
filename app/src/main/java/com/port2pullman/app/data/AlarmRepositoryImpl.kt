@@ -28,6 +28,9 @@ class AlarmRepositoryImpl(
     override suspend fun setEnabled(ids: List<Long>, on: Boolean) =
         alarmDao.setEnabled(ids, on)
 
+    suspend fun resetLastStartedAt(id: Long) =
+        alarmDao.resetLastStartedAt(id)
+
     private fun toEntity(alarm: Alarm) = AlarmEntity(
         id = alarm.id,
         title = alarm.title,
