@@ -11,6 +11,8 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.port2pullman.app.App
+import com.port2pullman.app.debug.DebugConsoleScreen
+import com.port2pullman.app.debug.DebugLog
 import com.port2pullman.app.ui.ai.AIPromptDialog
 import com.port2pullman.app.ui.ai.AIViewModel
 import com.port2pullman.app.ui.home.AlarmListViewModel
@@ -24,6 +26,7 @@ object Routes {
     const val SETUP_GRAPH = "setup_graph/{alarmId}"
     const val SETUP_FORM = "setup_form"
     const val ADD_CONDITION = "add_condition"
+    const val DEBUG_CONSOLE = "debug_console"
 
     fun setupGraph(alarmId: Long = -1L) = "setup_graph/$alarmId"
 }
@@ -59,12 +62,21 @@ fun AppNavigation(app: App) {
         // ─── Home ────────────────────────────────────────────
         composable(Routes.HOME) {
             val homeViewModel: AlarmListViewModel = viewModel(factory = homeVmFactory)
+            DebugLog.d("Nav", "Home composable entered")
 
             HomeScreen(
                 viewModel = homeViewModel,
                 onCreateAlarm = { navController.navigate(Routes.setupGraph(-1L)) },
                 onEditAlarm = { id -> navController.navigate(Routes.setupGraph(id)) },
                 onAiCreate = { showAiDialog = true },
+                onOpenDebug = { navController.navigate(Routes.DEBUG_CONSOLE) },
+            )
+        }
+
+        // ─── Debug Console ──────────────────────────────────
+        composable(Routes.DEBUG_CONSOLE) {
+            DebugConsoleScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -85,8 +97,11 @@ fun AppNavigation(app: App) {
                     factory = setupVmFactory
                 )
 
+                DebugLog.d("Nav", "SETUP_FORM composed — VM #${System.identityHashCode(setupViewModel)}, alarmId=$alarmId")
+
                 // Init on first composition
                 LaunchedEffect(alarmId) {
+                    DebugLog.d("Nav", "SETUP_FORM LaunchedEffect(alarmId=$alarmId) fired")
                     if (alarmId > 0) setupViewModel.initForEdit(alarmId)
                     else setupViewModel.initForCreate()
                 }
@@ -117,6 +132,8 @@ fun AppNavigation(app: App) {
                     viewModelStoreOwner = parentEntry,
                     factory = setupVmFactory
                 )
+
+                DebugLog.d("Nav", "ADD_CONDITION composed — VM #${System.identityHashCode(setupViewModel)}")
 
                 AddConditionScreen(
                     viewModel = setupViewModel,

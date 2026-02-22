@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,11 +34,22 @@ fun HomeScreen(
     onCreateAlarm: () -> Unit,
     onEditAlarm: (Long) -> Unit,
     onAiCreate: () -> Unit,
+    onOpenDebug: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
 
     Scaffold(
         containerColor = Surface,
+        floatingActionButton = {
+            // Debug Console FAB – temporary purple button
+            SmallFloatingActionButton(
+                onClick = onOpenDebug,
+                containerColor = Color(0xFF7C3AED),
+                contentColor = Color.White,
+            ) {
+                Icon(Icons.Default.Terminal, contentDescription = "Debug Console")
+            }
+        }
     ) { padding ->
         Column(
             modifier = Modifier

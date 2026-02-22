@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.port2pullman.app.data.IAlarmRepository
 import com.port2pullman.app.data.IConditionRepository
+import com.port2pullman.app.debug.DebugLog
 import com.port2pullman.app.model.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -50,7 +51,11 @@ class SetupViewModel(
     private val _state = MutableStateFlow(SetupUiState())
     val uiState: StateFlow<SetupUiState> = _state.asStateFlow()
 
+    /** Prevents re-initialization when returning from AddConditionScreen. */
+    private var initialized = false
+
     init {
+        DebugLog.d("SetupVM", "Created instance #${System.identityHashCode(this)}")
         // Observe categories
         viewModelScope.launch {
             conditionRepo.getCategories().collect { cats ->
@@ -61,6 +66,12 @@ class SetupViewModel(
 
     // ─── Init for create / edit ──────────────────────────────
     fun initForCreate() {
+        if (initialized) {
+            DebugLog.d("SetupVM", "initForCreate() SKIPPED (already initialized, ${_state.value.conditions.size} conditions)")
+            return
+        }
+        initialized = true
+        DebugLog.d("SetupVM", "initForCreate() running — resetting state")
         _state.value = _state.value.copy(
             title = "",
             conditions = emptyList(),
@@ -75,6 +86,12 @@ class SetupViewModel(
     }
 
     fun initForEdit(alarmId: Long) {
+        if (initialized) {
+            DebugLog.d("SetupVM", "initForEdit($alarmId) SKIPPED (already initialized)")
+            return
+        }
+        initialized = true
+        DebugLog.d("SetupVM", "initForEdit($alarmId) running — loading alarm")
         viewModelScope.launch {
             alarmRepo.getById(alarmId)
                 .filterNotNull()
@@ -120,17 +137,20 @@ class SetupViewModel(
     fun openModifyCondition(index: Int) = _state.update { it.copy(modifyConditionIndex = index) }
 
     fun selectCondition(condition: LeafCondition) {
+        DebugLog.i("SetupVM", "selectCondition('${condition.label}') on VM #${System.identityHashCode(this)}")
         _state.update { s ->
             val modIdx = s.modifyConditionIndex
             if (modIdx != null && modIdx in s.conditions.indices) {
                 // Replace existing
                 val newConds = s.conditions.toMutableList()
                 newConds[modIdx] = condition
+                DebugLog.d("SetupVM", "Replaced condition at index $modIdx → ${newConds.size} total")
                 s.copy(conditions = newConds, modifyConditionIndex = null)
             } else {
                 // Add new
                 val newOps = if (s.conditions.isNotEmpty())
                     s.operators + Operator.AND else s.operators
+                DebugLog.d("SetupVM", "Added condition → ${s.conditions.size + 1} total")
                 s.copy(
                     conditions = s.conditions + condition,
                     operators = newOps,
@@ -141,6 +161,7 @@ class SetupViewModel(
     }
 
     fun removeCondition(index: Int) {
+        DebugLog.d("SetupVM", "removeCondition($index)")
         _state.update { s ->
             val newConds = s.conditions.toMutableList().apply { removeAt(index) }
             val newOps = s.operators.toMutableList()
@@ -219,6 +240,7 @@ class SetupViewModel(
     // ─── Save ────────────────────────────────────────────────
     fun save(onDone: () -> Unit) {
         val s = _state.value
+        DebugLog.i("SetupVM", "save() — title='${s.title}', ${s.conditions.size} conditions")
         val title = s.title.ifBlank { "Untitled Alarm" }
         val root = buildComposite(s.conditions, s.operators)
         val alarm = Alarm(
