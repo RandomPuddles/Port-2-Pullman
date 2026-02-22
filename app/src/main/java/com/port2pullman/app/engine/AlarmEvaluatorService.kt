@@ -98,6 +98,15 @@ class AlarmEvaluatorService : Service() {
     }
 
     private suspend fun evaluateAll() {
+        // Pre-fetch weather so data is current before any condition checks.
+        // Without this, ensureFresh() fires-and-forgets and evaluations
+        // read stale cached values (especially problematic in background).
+        try {
+            WeatherProvider.fetchNow(this@AlarmEvaluatorService, forceRefresh = false)
+        } catch (e: Exception) {
+            DebugLog.w("EvalService", "Weather pre-fetch failed: ${e.message}")
+        }
+
         val alarms = alarmRepo.getAll().first()
         val enabled = alarms.filter { it.enabled }
         DebugLog.d("EvalService", "evaluateAll: ${enabled.size}/${alarms.size} alarms enabled")
