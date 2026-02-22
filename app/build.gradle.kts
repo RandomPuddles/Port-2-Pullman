@@ -25,7 +25,9 @@ android {
         val secrets = Properties().apply {
             if (secretsFile.exists()) load(secretsFile.inputStream())
         }
-        buildConfigField("String", "GEMINI_API_KEY", "\"${secrets.getProperty("GEMINI_API_KEY", "")}\"")    }
+        buildConfigField("String", "GEMINI_API_KEY", "\"${secrets.getProperty("GEMINI_API_KEY", "")}\"")
+        buildConfigField("String", "ELEVENLABS_API_KEY", "\"${secrets.getProperty("ELEVENLABS_API_KEY", "")}\"")
+    }
 
     buildTypes {
         release {

@@ -32,6 +32,7 @@ class AlarmEvaluatorService : Service() {
     private lateinit var alarmRepo: AlarmRepositoryImpl
     private lateinit var evaluator: ConditionTreeEvaluator
     private lateinit var triggerHistoryDao: TriggerHistoryDao
+    private lateinit var ttsClient: TTSClient
 
     override fun onCreate() {
         super.onCreate()
@@ -41,6 +42,7 @@ class AlarmEvaluatorService : Service() {
         triggerHistoryDao = app.triggerHistoryDao
         notificationController = NotificationController(this)
         evaluator = ConditionTreeEvaluator(this, triggerHistoryDao)
+        ttsClient = TTSClient(this)
         LocationProvider.start(this)
         createChannel()
         startForeground(NOTIFICATION_ID, buildForegroundNotification())
@@ -51,6 +53,7 @@ class AlarmEvaluatorService : Service() {
 
     override fun onDestroy() {
         DebugLog.i("EvalService", "Service onDestroy")
+        ttsClient.stop()
         LocationProvider.stop(this)
         scope.cancel()
         super.onDestroy()
@@ -117,6 +120,19 @@ class AlarmEvaluatorService : Service() {
             if (triggered) {
                 DebugLog.i("EvalService", "TRIGGERED: '${alarm.title}'")
                 notificationController.showTriggered(alarm)
+
+                // Speak alarm title aloud via ElevenLabs TTS
+                if (alarm.readout) {
+                    DebugLog.i("EvalService", "TTS readout for '${alarm.title}'")
+                    scope.launch {
+                        try {
+                            ttsClient.speak("Alarm: ${alarm.title}")
+                        } catch (e: Exception) {
+                            DebugLog.e("EvalService", "TTS readout failed: ${e.message}")
+                        }
+                    }
+                }
+
                 // Record trigger in history for limit conditions
                 triggerHistoryDao.insert(TriggerHistoryEntity(alarmId = alarm.id))
                 DebugLog.d("EvalService", "Recorded trigger history for alarm ${alarm.id}")
