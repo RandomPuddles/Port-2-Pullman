@@ -1,0 +1,334 @@
+@startuml Component Architecture – Conditional Alarms
+
+title Conditional Alarms · Component Architecture\nKotlin · Jetpack Compose · Coroutines/Flow · Room · Moshi · DataStore · Ktor Client
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #F8FAF6
+skinparam defaultFontName Roboto
+skinparam defaultFontSize 12
+
+skinparam component {
+  BackgroundColor #E8F5E9
+  BorderColor      #1a6b52
+  FontColor        #191c1a
+  ArrowColor       #1a6b52
+}
+skinparam interface {
+  BackgroundColor #C8F5D6
+  BorderColor      #1a6b52
+}
+skinparam package {
+  BackgroundColor #F1F8F5
+  BorderColor      #90CAA0
+  FontColor        #00210e
+  FontStyle        bold
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor      #F9A825
+}
+skinparam arrow {
+  Color #414942
+}
+
+' ═══════════════════════════════════════════════════════════════
+'  INTERFACES  (contracts between components – the only shared API)
+' ═══════════════════════════════════════════════════════════════
+
+interface "IAlarmRepository" as IAlarmRepo
+interface "IConditionRepository" as ICondRepo
+interface "IAlarmEvaluatorService" as IEvalSvc
+interface "INotificationController" as INotifCtrl
+interface "IAIService" as IAISvc
+interface "IConditionEvaluator" as ICondEval
+interface "IAlarmDraftRepository" as IAlarmDraftRepo
+
+' ═══════════════════════════════════════════════════════════════
+'  DEV 1 – UI: Alarm Management
+'  Owns: Home screen, Setup screen, Select mode, Search UI,
+'        AlarmViewModel, NavGraph
+' ═══════════════════════════════════════════════════════════════
+
+package "Dev 1 · UI: Alarm Management  (Compose + ViewModel)" {
+  component [HomeScreen\n─────────\nAlarm list, search bar,\nlong-press select mode,\nbulk enable/disable/delete] as HomeScreen
+  component [SetupScreen\n─────────\nTitle input, condition blocks\n(draggable order), bool-op chips,\noptions toggles, AI draft review] as SetupScreen
+  component [AlarmViewModel\n────────────\nStateFlow<UiState>\nexposes alarm list,\nedit draft & AI draft] as AlarmVM
+  component [NavGraph\n────────────\nCompose Navigation:\nHome ↔ Setup ↔\nAddCondition routes] as NavGraph
+}
+
+' ═══════════════════════════════════════════════════════════════
+'  DEV 2 – UI: Condition Browser & Custom Condition Editor
+'  Owns: AddCondition screen, category grid, condition items,
+'        CustomConditionDialog, ConditionViewModel
+' ═══════════════════════════════════════════════════════════════
+
+package "Dev 2 · UI: Condition Browser  (Compose + ViewModel)" {
+  component [AddConditionScreen\n─────────────────\nCategory grid, condition item list,\nbreadcrumb navigation] as AddCondScreen
+  component [CustomConditionDialog\n────────────────────\nTitle · Statement · RefreshFrequency\n(number + unit dropdown)] as CustomDialog
+  component [AIPromptDialog\n──────────────\nText prompt input,\nsubmit → review draft] as AIDialog
+  component [ConditionViewModel\n───────────────────\nStateFlow<CategoryList>\nStateFlow<CustomConditions>] as CondVM
+}
+
+' ═══════════════════════════════════════════════════════════════
+'  DEV 3 – Data Layer
+'  Owns: Room DB schema, DAOs, Repositories, Moshi adapters,
+'        DataStore prefs, all entities/models (shared models
+'        published as a :data-models Gradle module)
+' ═══════════════════════════════════════════════════════════════
+
+package "Dev 3 · Data Layer  (Room · Moshi · DataStore)" {
+  component [AlarmRepository\n─────────────\nImplements IAlarmRepository\nRoom + Flow, upsert/delete/\nsetEnabled(ids)/reorderConditions] as AlarmRepo
+  component [ConditionRepository\n──────────────────\nImplements IConditionRepository\nBuilt-in: static list\nCustom: Room + Flow] as CondRepo
+  component [AlarmDraftRepository\n────────────────────\nImplements IAlarmDraftRepository\nIn-memory StateFlow<AlarmDraft?>\nBridge: AI result → AlarmViewModel] as AlarmDraftRepo
+  component [Room Database\n─────────────\nAlarmDao  ConditionDao\nSQLite via Room KSP] as RoomDB
+  component [Moshi Adapters\n──────────────\nList<Condition> ↔ JSON\nOperator enum adapter\nRefreshFreq adapter] as Moshi
+  component [AppPreferences\n─────────────\nDataStore<Preferences>\ntheme / last-search /\ndefault operator] as DataStore
+}
+
+' ═══════════════════════════════════════════════════════════════
+'  DEV 4 – Background Engine
+'  Owns: ForegroundService eval loop, per-type condition
+'        evaluators, notification/TTS/ring, Ktor AI & weather
+' ═══════════════════════════════════════════════════════════════
+
+package "Dev 4 · Background Engine  (Service · Coroutines · Ktor)" {
+  component [AlarmEvaluatorService\n──────────────────────\nForeground Service\nCoroutineScope per alarm\nObserves enabled alarms,\nrespects AND / OR operators] as EvalSvc
+  component [ConditionEvaluatorImpl\n─────────────────────\nStrategy per type:\nWeather · Device · Time\nLocation · Recurring · Custom] as CondEvalImpl
+  component [NotificationController\n────────────────────\nRing: MediaPlayer loop\nReadout: TextToSpeech\nPing: NotificationCompat] as NotifCtrlImpl
+  component [AIServiceImpl\n──────────────\nKtor Client POST → AI endpoint\nMoshi deserialize AlarmDraft\nReturns Result<AlarmDraft>] as AIImpl
+  component [ExternalDataFetcher\n────────────────────\nKtor Client GET:\nWeather API · Location API\nResult cached by refreshFreq] as ExtFetch
+}
+
+' ═══════════════════════════════════════════════════════════════
+'  PROVIDED INTERFACES  (components publish their contract)
+' ═══════════════════════════════════════════════════════════════
+
+AlarmRepo      -up-  IAlarmRepo
+CondRepo       -up-  ICondRepo
+AlarmDraftRepo -up-  IAlarmDraftRepo
+EvalSvc        -up-  IEvalSvc
+NotifCtrlImpl  -up-  INotifCtrl
+AIImpl         -up-  IAISvc
+CondEvalImpl   -up-  ICondEval
+
+' ═══════════════════════════════════════════════════════════════
+'  REQUIRED INTERFACES  (components consume contracts)
+' ═══════════════════════════════════════════════════════════════
+
+' Dev 1 ← Data + Engine
+AlarmVM ..> IAlarmRepo       : <<use>>
+AlarmVM ..> IEvalSvc         : <<use>>
+AlarmVM ..> INotifCtrl       : <<use>>
+AlarmVM ..> IAlarmDraftRepo  : <<observe draft>>
+
+' Dev 2 ← Data + Engine
+CondVM  ..> ICondRepo   : <<use>>
+CondVM  ..> IAISvc      : <<use>>
+CondVM  ..> IAlarmDraftRepo : <<push draft>>
+
+' Dev 4 internal
+EvalSvc ..> ICondEval   : <<use>>
+EvalSvc ..> INotifCtrl  : <<use>>
+CondEvalImpl ..> ExtFetch : <<use>>
+
+' Data layer internal
+AlarmRepo      ..> RoomDB    : <<use>>
+CondRepo       ..> RoomDB    : <<use>>
+RoomDB         ..> Moshi     : <<use>>
+AlarmRepo      ..> DataStore : <<use>>
+AlarmDraftRepo ..> Moshi     : <<use>>
+
+' UI wiring
+HomeScreen   ..> AlarmVM  : <<observe StateFlow>>
+SetupScreen  ..> AlarmVM  : <<observe StateFlow>>
+AddCondScreen ..> CondVM  : <<observe StateFlow>>
+CustomDialog  ..> CondVM  : <<observe StateFlow>>
+AIDialog      ..> CondVM  : <<observe StateFlow>>
+
+HomeScreen   ..> NavGraph : <<navigate>>
+SetupScreen  ..> NavGraph : <<navigate>>
+AddCondScreen ..> NavGraph : <<navigate>>
+
+' ═══════════════════════════════════════════════════════════════
+'  NOTES ON INTERFACES
+' ═══════════════════════════════════════════════════════════════
+
+note right of IAlarmRepo
+  **IAlarmRepository**
+  ─────────────────────────────────
+  + getAll(): Flow<List<Alarm>>
+  + search(query: String): Flow<List<Alarm>>
+  + getById(id: Long): Flow<Alarm?>
+  + upsert(alarm: Alarm): suspend Long
+  + delete(ids: List<Long>): suspend Unit
+  + setEnabled(ids: List<Long>, on: Boolean): suspend Unit
+  + reorderConditions(alarmId: Long,
+      orderedConditions: List<Condition>): suspend Unit
+  ─────────────────────────────────
+  · setEnabled accepts a List to support both
+    single-alarm toggle and bulk select-mode
+    enable/disable without calling in a loop
+  · reorderConditions persists the user's
+    drag-to-reorder result; Alarm entity stores
+    conditions as an ordered JSON array via Moshi
+  · Flow keeps UI reactive with no manual refresh
+  · Defined in :data-models module so Dev 1, 3, 4
+    share it without circular Gradle deps
+end note
+
+note right of ICondRepo
+  **IConditionRepository**
+  ─────────────────────────────────
+  + getBuiltInCategories(): List<Category>
+  + getCustomConditions(): Flow<List<Condition>>
+  + upsertCustom(c: Condition): suspend Unit
+  + deleteCustom(id: Long): suspend Unit
+  ─────────────────────────────────
+  · Built-in categories are a compiled static list
+    (no DB reads) – zero migration risk
+  · Custom conditions persist in Room
+  · RefreshFrequency stored as JSON field via Moshi
+  · Both Dev 2 (UI) and Dev 4 (eval) depend only
+    on this interface, never on each other
+end note
+
+note right of IEvalSvc
+  **IAlarmEvaluatorService**
+  ─────────────────────────────────
+  + start(): Unit
+  + stop(): Unit
+  + triggeredAlarms: SharedFlow<TriggeredAlarm>
+  ─────────────────────────────────
+  · Android ForegroundService with a
+    SupervisorScope coroutine per alarm
+  · Launches independent coroutines for each
+    enabled alarm; cancels on disable/delete
+  · AND operator: all conditions must be true
+    OR  operator: any condition must be true
+  · Emits TriggeredAlarm; EvalSvc then calls
+    INotificationController and marks
+    TriggerOnce alarms disabled via IAlarmRepo
+end note
+
+note right of INotifCtrl
+  **INotificationController**
+  ─────────────────────────────────
+  + showRing(alarm: Alarm): Unit
+  + showReadout(alarm: Alarm): Unit
+  + showPing(alarm: Alarm): Unit
+  + dismiss(alarmId: Long): Unit
+  ─────────────────────────────────
+  · Ping  → NotificationCompat (no audio)
+  · Ring  → MediaPlayer looping until dismiss
+  · Readout → TextToSpeech speaks Alarm.title;
+    if Ring also selected, TTS plays after
+    Ring dismiss (chained via SharedFlow)
+  · Dismiss action sent via PendingIntent →
+    BroadcastReceiver → calls dismiss(id)
+end note
+
+note right of IAISvc
+  **IAIService**
+  ─────────────────────────────────
+  + generateAlarm(prompt: String):
+      suspend Result<AlarmDraft>
+  ─────────────────────────────────
+  · Ktor Client: POST /generate-alarm
+  · Request  body: { "prompt": "…" }
+  · Response body (Moshi):
+      { title, conditions[], readout,
+        ring, triggerOnce }
+  · Returns Result.Success(AlarmDraft) or
+    Result.Failure(reason) – never throws
+  · On success, ConditionViewModel pushes the
+    AlarmDraft into IAlarmDraftRepository.
+    AlarmViewModel observes IAlarmDraftRepository
+    and pre-fills SetupScreen for user review
+    before IAlarmRepository.upsert() is called.
+  · API key stored in BuildConfig / secrets.properties
+    (never committed to source control)
+end note
+
+note right of IAlarmDraftRepo
+  **IAlarmDraftRepository**
+  ─────────────────────────────────
+  + draft: StateFlow<AlarmDraft?>
+  + set(draft: AlarmDraft): Unit
+  + clear(): Unit
+  ─────────────────────────────────
+  · Pure in-memory bridge (no DB, no IO).
+  · Owned by Dev 3 as a singleton in :data-models.
+  · Dev 2 (ConditionViewModel) writes via set().
+  · Dev 1 (AlarmViewModel) reads via draft Flow.
+  · This decouples AI result delivery from both
+    UI modules – neither imports the other.
+  · clear() is called by AlarmViewModel after
+    SetupScreen is populated, preventing stale
+    drafts on subsequent screen opens.
+end note
+
+note right of ICondEval
+  **IConditionEvaluator**
+  ─────────────────────────────────
+  + evaluate(cond: Condition,
+             context: EvalContext):
+      suspend Boolean
+  ─────────────────────────────────
+  · Strategy pattern: one impl class per
+    ConditionType (Weather, Device, Time,
+    Location, Recurring, Custom)
+  · Weather / Location → ExternalDataFetcher
+    (Ktor GET, in-memory cache keyed by
+    Condition.refreshFreq to avoid hammering APIs)
+  · Device → BroadcastReceiver / BatteryManager
+  · Time/Date → kotlinx-datetime
+  · Custom → user statement evaluated as a
+    simple Boolean expression parser
+  · Each strategy fully isolated; adding a new
+    category never touches other strategies
+end note
+
+note bottom of RoomDB
+  **Room Database  (v1)**
+  ─────────────────────────────────
+  Tables:  alarms  |  custom_conditions
+  ─────────────────────────────────
+  AlarmEntity:
+    id · title · conditionsJson · operatorsJson
+    readout · ring · triggerOnce · enabled
+  CustomConditionEntity:
+    id · title · statement · refreshFreqJson
+
+  Migrations scripted in :data module.
+  Dev 3 owns all schema changes; other devs
+  interact only through IAlarmRepo / ICondRepo.
+end note
+
+note bottom of DataStore
+  **AppPreferences  (DataStore)**
+  ─────────────────────────────────
+  Keys:
+    LAST_SEARCH_QUERY : String
+    DEFAULT_BOOL_OP   : String (AND|OR)
+    THEME             : String (light|dark|system)
+  ─────────────────────────────────
+  Proto schema defined in :data module.
+  Changes require only Dev 3 to update
+  the .proto file and migration.
+end note
+
+note bottom of Moshi
+  **Moshi Adapters  (:data module)**
+  ─────────────────────────────────
+  ConditionListAdapter    – List<Condition> ↔ JSON
+  OperatorListAdapter     – List<Operator>  ↔ JSON
+  RefreshFrequencyAdapter – data class ↔ JSON
+  AlarmDraftAdapter       – AI response ↔ AlarmDraft
+  ─────────────────────────────────
+  All adapters live in :data-models.
+  Registered once in a shared MoshiModule
+  (Hilt/manual DI) so every component
+  uses the same Moshi instance.
+end note
+
+@enduml

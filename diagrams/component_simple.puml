@@ -1,0 +1,140 @@
+@startuml Conditional Alarms – Simple Component Diagram
+title Conditional Alarms · Component Overview
+
+skinparam defaultFontName Roboto
+skinparam defaultFontSize 13
+skinparam componentStyle rectangle
+skinparam ArrowColor #336699
+skinparam ArrowFontSize 11
+
+skinparam package {
+  BackgroundColor #F0F4F8
+  BorderColor #5C8A8A
+  FontStyle bold
+  FontSize 14
+}
+skinparam component {
+  BackgroundColor #DDEEFF
+  BorderColor #336699
+}
+skinparam note {
+  BackgroundColor #FAFAFA
+  BorderColor #AAAAAA
+  FontSize 11
+}
+
+' ═══════════════════════════════════════════════
+'  ROW 1 – UI Screens (left → right)
+' ═══════════════════════════════════════════════
+
+package "Home Screen" as PKG_HOME {
+  component [Alarm List\n─────────────\nBrowse all alarms\nEnable / Disable toggle] as AlarmList
+  component [Search Bar\n─────────────\nFilter by title\nor condition text] as SearchBar
+}
+
+package "Alarm Setup Screen" as PKG_SETUP {
+  component [Title Field\n─────────────\nEnter / edit alarm title] as TitleField
+  component [Condition List\n─────────────\nOrdered blocks with AND/OR chips\nDrag to reorder · tap × to remove\nTap value badge to set number] as CondList
+  component [Options\n─────────────\nReadout (TTS)\nRing (audio loop)\nTrigger Once] as Options
+  component [+ Add Condition\n─────────────\nOpens Condition Browser] as AddCondBtn
+}
+
+package "Condition Browser" as PKG_BROWSER {
+  component [Category Grid\n─────────────\nWeather · Device Attributes\nTime/Date · Location\nRecurring Schedule · Custom] as CatGrid
+  component [Condition Picker\n─────────────\nConditions within a category\nTap to select & return] as CondPicker
+  component [Custom Condition Editor\n─────────────\nTitle · Statement\nRefresh Frequency\nCreate · Modify · Delete\n(custom conditions only)] as CustomEditor
+}
+
+' ═══════════════════════════════════════════════
+'  ROW 2 – AI (sits below Home / Setup)
+' ═══════════════════════════════════════════════
+
+package "AI Alarm Creator" as PKG_AI {
+  component [AI Prompt Dialog\n─────────────\nFree-text "Write prompt…"\nOpens from Home or Setup] as AIDialog
+  component [AI Service\n─────────────\nCalls AI API with prompt\nReturns alarm draft\nfor review in Setup Screen] as AISvc
+}
+
+' ═══════════════════════════════════════════════
+'  ROW 3 – Data (storage + engine side by side)
+' ═══════════════════════════════════════════════
+
+package "Alarm Storage" as PKG_STORAGE {
+  component [Alarm Repository\n─────────────\nSave · Load · Delete alarms\nEnable / Disable (single or bulk)\nPersist condition order] as AlarmRepo
+  component [Condition Repository\n─────────────\nBuilt-in condition catalogue\nSave · Load · Delete\ncustom conditions] as CondRepo
+}
+
+package "Alarm Engine  (background)" as PKG_ENGINE {
+  component [Condition Evaluator\n─────────────\nChecks each type per alarm:\nWeather · Device · Time\nLocation · Recurring · Custom\nRespects AND / OR operators] as Evaluator
+  component [Notification Controller\n─────────────\nPing  → silent notification\nRing  → audio loop until dismissed\nReadout → TTS reads title aloud\nTrigger Once → auto-disables alarm] as Notifier
+}
+
+' ═══════════════════════════════════════════════
+'  LAYOUT GUIDES  (hidden arrows enforce columns)
+' ═══════════════════════════════════════════════
+
+PKG_HOME    -[hidden]right- PKG_SETUP
+PKG_SETUP   -[hidden]right- PKG_BROWSER
+PKG_AI      -[hidden]right- PKG_STORAGE
+PKG_STORAGE -[hidden]right- PKG_ENGINE
+PKG_HOME    -[hidden]down-  PKG_AI
+PKG_SETUP   -[hidden]down-  PKG_STORAGE
+PKG_BROWSER -[hidden]down-  PKG_ENGINE
+
+' ═══════════════════════════════════════════════
+'  CONNECTIONS
+' ═══════════════════════════════════════════════
+
+' Home → Storage
+AlarmList  -down-> AlarmRepo : load · toggle enabled
+SearchBar  -down-> AlarmRepo : search by title & condition
+
+' Setup → Storage
+TitleField -down-> AlarmRepo : save title
+CondList   -down-> AlarmRepo : save order & operators
+Options    -down-> AlarmRepo : save readout / ring / once
+
+' Setup → Browser
+AddCondBtn -right-> CatGrid  : open
+
+' Browser internal
+CatGrid    -right-> CondPicker   : show conditions
+CatGrid    -down->  CustomEditor : open editor
+
+' Browser → Setup (return)
+CondPicker -left-> CondList : add / replace condition
+
+' Browser → Storage
+CatGrid      -down-> CondRepo : load built-in categories
+CustomEditor -down-> CondRepo : create / modify / delete
+
+' AI flow
+AIDialog -right-> AISvc    : send prompt
+AISvc    -down->  AlarmRepo : pre-fill Setup Screen draft
+
+' Engine flow
+Evaluator -left->  AlarmRepo : observe enabled alarms
+Evaluator -right-> CondRepo  : fetch condition definitions
+Evaluator -right-> Notifier  : trigger on match
+
+' ═══════════════════════════════════════════════
+'  NOTES
+' ═══════════════════════════════════════════════
+
+note bottom of CustomEditor
+  Only custom conditions can be
+  modified or deleted. They are
+  saved to the "Custom" category
+  and reusable in future alarms.
+end note
+
+note bottom of AISvc
+  AI draft is loaded into Setup Screen
+  for the user to review before saving.
+end note
+
+note bottom of Notifier
+  If both Ring and Readout are on,
+  TTS plays after Ring is dismissed.
+end note
+
+@enduml
