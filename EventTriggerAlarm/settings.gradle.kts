@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "EventTriggerAlarm"
 include(":app")
+include(":gemini-api")
  
