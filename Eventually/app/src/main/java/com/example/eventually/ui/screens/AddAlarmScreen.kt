@@ -19,18 +19,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -49,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.eventually.domain.model.AlarmItem
 import com.example.eventually.ui.components.alarm.RecurringDaysSelector
@@ -129,6 +137,15 @@ fun AddAlarmScreen(
     var selectedSoundUri by remember { mutableStateOf<Uri?>(null) }
     var selectedSoundTitle by remember { mutableStateOf<String?>(null) }
     var vibrationEnabled by remember { mutableStateOf(true) }
+    var snoozeEnabled by remember { mutableStateOf(true) }
+    var snoozeIntervalMinutes by remember { mutableStateOf(5) }
+    var snoozeRepeatCount by remember { mutableStateOf(3) }
+    var snoozeIntervalExpanded by remember { mutableStateOf(false) }
+    var snoozeRepeatExpanded by remember { mutableStateOf(false) }
+    var showCustomIntervalDialog by remember { mutableStateOf(false) }
+    var showCustomRepeatDialog by remember { mutableStateOf(false) }
+    var customIntervalInput by remember { mutableStateOf("") }
+    var customRepeatInput by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val ringtonePickerLauncher = rememberLauncherForActivityResult(
@@ -340,6 +357,166 @@ fun AddAlarmScreen(
             }
         }
 
+        // Snooze
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Snooze",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (snoozeEnabled) "$snoozeIntervalMinutes minutes, $snoozeRepeatCount times" else "Off",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = snoozeEnabled,
+                        onCheckedChange = { snoozeEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = ClockAccent,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    )
+                }
+                if (snoozeEnabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedCard(
+                                onClick = { snoozeIntervalExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        text = "Interval",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "$snoozeIntervalMinutes min",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Filled.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = snoozeIntervalExpanded,
+                                onDismissRequest = { snoozeIntervalExpanded = false }
+                            ) {
+                                listOf(5, 10, 15).forEach { mins ->
+                                    DropdownMenuItem(
+                                        text = { Text("$mins min") },
+                                        onClick = {
+                                            snoozeIntervalMinutes = mins
+                                            snoozeIntervalExpanded = false
+                                        }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Custom...") },
+                                    onClick = {
+                                        snoozeIntervalExpanded = false
+                                        customIntervalInput = snoozeIntervalMinutes.toString()
+                                        showCustomIntervalDialog = true
+                                    }
+                                )
+                            }
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedCard(
+                                onClick = { snoozeRepeatExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        text = "Repeat",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "$snoozeRepeatCount times",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Filled.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = snoozeRepeatExpanded,
+                                onDismissRequest = { snoozeRepeatExpanded = false }
+                            ) {
+                                listOf(1, 2, 3, 5).forEach { count ->
+                                    DropdownMenuItem(
+                                        text = { Text("$count times") },
+                                        onClick = {
+                                            snoozeRepeatCount = count
+                                            snoozeRepeatExpanded = false
+                                        }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Custom...") },
+                                    onClick = {
+                                        snoozeRepeatExpanded = false
+                                        customRepeatInput = snoozeRepeatCount.toString()
+                                        showCustomRepeatDialog = true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Alarm name (optional)
         OutlinedTextField(
             value = alarmTitle,
@@ -381,6 +558,76 @@ fun AddAlarmScreen(
             }
         }
 
+        if (showCustomIntervalDialog) {
+            AlertDialog(
+                onDismissRequest = { showCustomIntervalDialog = false },
+                title = { Text("Custom snooze interval") },
+                text = {
+                    OutlinedTextField(
+                        value = customIntervalInput,
+                        onValueChange = { customIntervalInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("Minutes") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val mins = customIntervalInput.toIntOrNull()
+                            if (mins != null && mins in 1..120) {
+                                snoozeIntervalMinutes = mins
+                                showCustomIntervalDialog = false
+                            }
+                        }
+                    ) {
+                        Text("OK")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCustomIntervalDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        if (showCustomRepeatDialog) {
+            AlertDialog(
+                onDismissRequest = { showCustomRepeatDialog = false },
+                title = { Text("Custom snooze repeat") },
+                text = {
+                    OutlinedTextField(
+                        value = customRepeatInput,
+                        onValueChange = { customRepeatInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("Times") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val count = customRepeatInput.toIntOrNull()
+                            if (count != null && count in 1..20) {
+                                snoozeRepeatCount = count
+                                showCustomRepeatDialog = false
+                            }
+                        }
+                    ) {
+                        Text("OK")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCustomRepeatDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         // Cancel / Save buttons - always visible at bottom
         Row(
             modifier = Modifier
@@ -409,6 +656,9 @@ fun AddAlarmScreen(
                             title = alarmTitle.trim(),
                             alarmSoundUri = selectedSoundUri?.toString(),
                             vibration = vibrationEnabled,
+                            snoozeEnabled = snoozeEnabled,
+                            snoozeIntervalMinutes = snoozeIntervalMinutes,
+                            snoozeRepeatCount = snoozeRepeatCount,
                             isEnabled = true,
                             isRecurring = isRecurring,
                             recurringDays = selectedDays,
