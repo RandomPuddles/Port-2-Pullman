@@ -1,0 +1,63 @@
+{
+  "categories": [
+    {
+      "name": "Weather",
+      "icon": "cloud",
+      "categoryKey": "weather",
+      "conditions": [
+        { "type": "temperature_above", "label": "Temperature above", "hasNum": true, "unit": "°F" },
+        { "type": "temperature_below", "label": "Temperature below", "hasNum": true, "unit": "°F" },
+        { "type": "rain_expected",     "label": "Rain expected",     "hasNum": false },
+        { "type": "snow_expected",     "label": "Snow expected",     "hasNum": false },
+        { "type": "wind_speed_above",  "label": "Wind speed above",  "hasNum": true, "unit": "mph" },
+        { "type": "humidity_above",    "label": "Humidity above",    "hasNum": true, "unit": "%" }
+      ]
+    },
+    {
+      "name": "Device Attributes",
+      "icon": "smartphone",
+      "categoryKey": "device",
+      "conditions": [
+        { "type": "battery_below",       "label": "Battery below",       "hasNum": true, "unit": "%" },
+        { "type": "battery_above",       "label": "Battery above",       "hasNum": true, "unit": "%" },
+        { "type": "connected_wifi",      "label": "Connected to WiFi",   "hasNum": false },
+        { "type": "bluetooth_connected", "label": "Bluetooth connected", "hasNum": false },
+        { "type": "charging",            "label": "Charging",            "hasNum": false }
+      ]
+    },
+    {
+      "name": "Time / Date",
+      "icon": "schedule",
+      "categoryKey": "time",
+      "conditions": [
+        { "type": "time_is",          "label": "Time is",          "hasNum": false, "placeholder": "HH:MM" },
+        { "type": "day_of_week",      "label": "Day of week is",   "hasNum": false },
+        { "type": "date_is",          "label": "Date is",          "hasNum": false },
+        { "type": "minutes_from_now", "label": "Minutes from now", "hasNum": true, "unit": "min" },
+        { "type": "seconds_from_now", "label": "Seconds from now", "hasNum": true, "unit": "sec" }
+      ]
+    },
+    {
+      "name": "Location",
+      "icon": "location_on",
+      "categoryKey": "location",
+      "conditions": [
+        { "type": "arrive_at",      "label": "Arrive at location", "hasNum": false },
+        { "type": "leave_location", "label": "Leave location",     "hasNum": false },
+        { "type": "within_radius",  "label": "Within radius of",   "hasNum": true, "unit": "mi" }
+      ]
+    },
+    {
+      "name": "Recurring Schedule",
+      "icon": "event_repeat",
+      "categoryKey": "recurring",
+      "conditions": [
+        { "type": "every_x_hours",     "label": "Every X hours",     "hasNum": true, "unit": "hrs" },
+        { "type": "every_x_days",      "label": "Every X days",      "hasNum": true, "unit": "days" },
+        { "type": "every_x_weeks",     "label": "Every X weeks",     "hasNum": true, "unit": "weeks" },
+        { "type": "x_times_per_day",   "label": "X times per day",   "hasNum": true, "unit": "times" },
+        { "type": "x_times_per_week",  "label": "X times per week",  "hasNum": true, "unit": "times" }
+      ]
+    }
+  ]
+}

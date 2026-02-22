@@ -17,4 +17,10 @@ class App : Application() {
     val conditionRepository: IConditionRepository by lazy {
         ConditionRepositoryImpl(database.conditionDao())
     }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Parse the condition catalog from res/raw/conditions.json
+        ConditionRegistry.init(this)
+    }
 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.port2pullman.app.BuildConfig
+import com.port2pullman.app.data.ConditionRegistry
 import com.port2pullman.app.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -72,11 +73,7 @@ class AIViewModel : ViewModel() {
         - "triggerOnce": boolean
         
         Available condition types:
-        Weather: temperature_above, temperature_below, rain_expected, snow_expected, wind_speed_above, humidity_above
-        Device: battery_below, battery_above, connected_wifi, bluetooth_connected, charging
-        Time: time_is, day_of_week, date_is, minutes_from_now
-        Location: arrive_at, leave_location, within_radius
-        Recurring: every_x_hours, every_x_days, every_x_weeks, x_times_per_day, x_times_per_week
+${ConditionRegistry.buildAiConditionList()}
         
         User request: "$userPrompt"
         
