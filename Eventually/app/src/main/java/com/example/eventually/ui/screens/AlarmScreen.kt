@@ -32,7 +32,10 @@ fun AlarmScreen(
         val first = alarms.firstOrNull()
         AlarmHeaderState(
             nextAlarmSummary = first?.let { "Alarm in 58 minutes" },
-            nextAlarmDetail = first?.let { "${it.label}, ${it.time}" }
+            nextAlarmDetail = first?.let {
+                val detail = if (it.title.isNotEmpty()) it.title else it.label
+                "$detail, ${it.time}"
+            }
         )
     }
 

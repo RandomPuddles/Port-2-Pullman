@@ -68,7 +68,7 @@ fun AlarmCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = alarm.label,
+                        text = alarm.title.ifEmpty { alarm.label },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

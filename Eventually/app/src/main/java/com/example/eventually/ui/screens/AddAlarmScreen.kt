@@ -2,6 +2,8 @@ package com.example.eventually.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -111,6 +114,7 @@ fun AddAlarmScreen(
     var selectedDate by remember { mutableStateOf(Calendar.getInstance()) }
     var selectedDays by remember { mutableStateOf(setOf<Int>()) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var alarmTitle by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -129,6 +133,12 @@ fun AddAlarmScreen(
             }
         )
 
+        // Scrollable content
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
         // Time picker
         Column(
             modifier = Modifier
@@ -214,6 +224,19 @@ fun AddAlarmScreen(
             }
         }
 
+        // Alarm name (optional)
+        OutlinedTextField(
+            value = alarmTitle,
+            onValueChange = { alarmTitle = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            label = { Text("Alarm name") },
+            placeholder = { Text("Optional") },
+            singleLine = true
+        )
+        }
+
         if (showDatePicker) {
             val datePickerState = rememberDatePickerState(
                 initialSelectedDateMillis = selectedDate.timeInMillis
@@ -242,13 +265,11 @@ fun AddAlarmScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Cancel / Save buttons
+        // Cancel / Save buttons - always visible at bottom
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 24.dp),
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(onClick = onCancel) {
@@ -269,6 +290,7 @@ fun AddAlarmScreen(
                             id = UUID.randomUUID().toString(),
                             time = timeString,
                             label = label,
+                            title = alarmTitle.trim(),
                             isEnabled = true,
                             isRecurring = isRecurring,
                             recurringDays = selectedDays,
