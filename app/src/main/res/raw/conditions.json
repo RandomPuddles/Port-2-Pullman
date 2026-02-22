@@ -77,6 +77,24 @@
           "rule": { "source": "device.isCharging", "op": "==", "valueRef": true },
           "requiresPermissions": [],
           "probeKeys": ["device.isCharging", "device.chargingSource"]
+        },
+        {
+          "type": "cellular_connected", "label": "Cellular connected", "hasNum": false,
+          "rule": { "source": "device.cellularConnected", "op": "==", "valueRef": true },
+          "requiresPermissions": [],
+          "probeKeys": ["device.cellularConnected", "device.cellSignalLevel", "device.cellSignalDbm"]
+        },
+        {
+          "type": "signal_above", "label": "Signal strength above", "hasNum": true, "unit": "level (0-4)",
+          "rule": { "source": "device.cellSignalLevel", "op": ">", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["device.cellSignalLevel", "device.cellSignalDbm"]
+        },
+        {
+          "type": "signal_below", "label": "Signal strength below", "hasNum": true, "unit": "level (0-4)",
+          "rule": { "source": "device.cellSignalLevel", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["device.cellSignalLevel", "device.cellSignalDbm"]
         }
       ]
     },

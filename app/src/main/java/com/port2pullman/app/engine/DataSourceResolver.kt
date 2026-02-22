@@ -10,6 +10,7 @@ import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
+import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 import com.port2pullman.app.data.TriggerHistoryDao
 import com.port2pullman.app.debug.DebugLog
@@ -57,6 +58,9 @@ class DataSourceResolver(
             "device.bluetoothPairedCount" -> resolveBluetoothPairedCount()
             "device.isCharging"     -> resolveIsCharging()
             "device.chargingSource" -> resolveChargingSource()
+            "device.cellularConnected" -> resolveCellularConnected()
+            "device.cellSignalLevel"   -> resolveCellSignalLevel()
+            "device.cellSignalDbm"     -> resolveCellSignalDbm()
 
             // ── Time / Date ─────────────────────────────────────────
             "time.epochMillis"      -> System.currentTimeMillis()
@@ -147,6 +151,46 @@ class DataSourceResolver(
         val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             ?: return 0
         return try { bm.adapter?.bondedDevices?.size ?: 0 } catch (_: Exception) { 0 }
+    }
+
+    // ─── Cellular helpers ────────────────────────────────────────────
+
+    /**
+     * Whether the device currently has an active cellular data transport.
+     * Uses [ConnectivityManager] — no permissions required.
+     */
+    private fun resolveCellularConnected(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val net = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(net) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+    }
+
+    /**
+     * Return the cellular signal level on a 0–4 scale:
+     *   0 = none, 1 = poor, 2 = moderate, 3 = good, 4 = great.
+     * Uses [TelephonyManager.getSignalStrength] (API 28+, no permission required).
+     */
+    private fun resolveCellSignalLevel(): Int {
+        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            ?: return 0
+        return tm.signalStrength?.level ?: 0
+    }
+
+    /**
+     * Return the cellular signal strength in dBm (e.g. −80).
+     * Iterates [SignalStrength.getCellSignalStrengths] and picks the
+     * strongest reading. Returns `null` when unavailable.
+     */
+    private fun resolveCellSignalDbm(): Int? {
+        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            ?: return null
+        val ss = tm.signalStrength ?: return null
+        val strengths = ss.cellSignalStrengths
+        if (strengths.isEmpty()) return null
+        // dBm values are negative; pick the one closest to 0 (strongest)
+        return strengths.maxOfOrNull { it.dbm }
     }
 
     private fun resolveIsCharging(): Boolean {
