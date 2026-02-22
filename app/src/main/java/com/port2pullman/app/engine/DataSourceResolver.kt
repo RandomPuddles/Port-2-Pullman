@@ -156,15 +156,24 @@ class DataSourceResolver(
     // ─── Cellular helpers ────────────────────────────────────────────
 
     /**
-     * Whether the device currently has an active cellular data transport.
-     * Uses [ConnectivityManager] — no permissions required.
+     * Whether the device has cellular connectivity available.
+     * Checks **all** registered networks (not just the active one) so
+     * this returns `true` even when WiFi is the preferred transport.
+     * Falls back to [TelephonyManager.getDataNetworkType] if no
+     * cellular network is registered but the radio is attached.
      */
     private fun resolveCellularConnected(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
-        val net = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(net) ?: return false
-        return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        // Check every registered network for TRANSPORT_CELLULAR
+        for (net in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(net) ?: continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) return true
+        }
+        // Fallback: the radio may be attached even without a Network object
+        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            ?: return false
+        return tm.signalStrength?.level?.let { it > 0 } ?: false
     }
 
     /**
