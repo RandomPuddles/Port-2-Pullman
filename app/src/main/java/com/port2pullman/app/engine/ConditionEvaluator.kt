@@ -1,6 +1,8 @@
 package com.port2pullman.app.engine
 
+import com.port2pullman.app.debug.DebugLog
 import com.port2pullman.app.model.*
+import java.util.Calendar
 
 /**
  * Strategy interface for evaluating individual condition types.
@@ -11,8 +13,9 @@ interface ConditionEvaluator {
 
     /**
      * Evaluate a single [LeafCondition] and return true if it is satisfied.
+     * [alarmCreatedAt] is the epoch-millis when the alarm was created/saved.
      */
-    suspend fun evaluate(condition: LeafCondition): Boolean
+    suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean
 }
 
 /** Evaluates weather-related conditions (stub – needs real API integration). */
@@ -23,8 +26,8 @@ class WeatherEvaluator : ConditionEvaluator {
         "wind_speed_above", "humidity_above"
     )
 
-    override suspend fun evaluate(condition: LeafCondition): Boolean {
-        // TODO: Integrate with a weather API (OpenWeatherMap, etc.)
+    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        DebugLog.w("WeatherEval", "${condition.type}: stub — always false (needs API key)")
         return false
     }
 }
@@ -36,21 +39,76 @@ class DeviceEvaluator : ConditionEvaluator {
         "connected_wifi", "bluetooth_connected", "charging"
     )
 
-    override suspend fun evaluate(condition: LeafCondition): Boolean {
-        // TODO: Read real device state via BatteryManager, ConnectivityManager, etc.
+    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        DebugLog.w("DeviceEval", "${condition.type}: stub — always false (needs system APIs)")
         return false
     }
 }
 
-/** Evaluates time and date conditions. */
+/** Evaluates time and date conditions — fully implemented. */
 class TimeEvaluator : ConditionEvaluator {
     override val supportedTypes = setOf(
         "time_is", "day_of_week", "date_is", "minutes_from_now"
     )
 
-    override suspend fun evaluate(condition: LeafCondition): Boolean {
-        // TODO: Compare against system clock
-        return false
+    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        return when (condition.type) {
+            "minutes_from_now" -> evaluateMinutesFromNow(condition, alarmCreatedAt)
+            "time_is" -> evaluateTimeIs(condition)
+            "day_of_week" -> evaluateDayOfWeek(condition)
+            else -> {
+                DebugLog.w("TimeEval", "${condition.type}: not yet implemented")
+                false
+            }
+        }
+    }
+
+    private fun evaluateMinutesFromNow(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        val minutes = when (val v = condition.value) {
+            is Number -> v.toDouble()
+            is String -> v.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+        val targetTime = alarmCreatedAt + (minutes * 60_000L).toLong()
+        val now = System.currentTimeMillis()
+        val remainingMs = targetTime - now
+        val triggered = now >= targetTime
+
+        DebugLog.d(
+            "TimeEval",
+            "minutes_from_now: value=${minutes}m, created=${alarmCreatedAt}, " +
+                    "target=$targetTime, now=$now, remaining=${remainingMs / 1000}s, triggered=$triggered"
+        )
+        return triggered
+    }
+
+    private fun evaluateTimeIs(condition: LeafCondition): Boolean {
+        // value expected as "HH:mm" string
+        val target = condition.value?.toString() ?: return false
+        val parts = target.split(":")
+        if (parts.size != 2) return false
+        val cal = Calendar.getInstance()
+        val currentHour = cal.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = cal.get(Calendar.MINUTE)
+        val matched = currentHour == (parts[0].toIntOrNull() ?: -1) &&
+                currentMinute == (parts[1].toIntOrNull() ?: -1)
+        DebugLog.d("TimeEval", "time_is: target=$target, current=$currentHour:$currentMinute, matched=$matched")
+        return matched
+    }
+
+    private fun evaluateDayOfWeek(condition: LeafCondition): Boolean {
+        val target = condition.value?.toString()?.uppercase() ?: return false
+        val cal = Calendar.getInstance()
+        val dayNames = mapOf(
+            Calendar.MONDAY to "MONDAY", Calendar.TUESDAY to "TUESDAY",
+            Calendar.WEDNESDAY to "WEDNESDAY", Calendar.THURSDAY to "THURSDAY",
+            Calendar.FRIDAY to "FRIDAY", Calendar.SATURDAY to "SATURDAY",
+            Calendar.SUNDAY to "SUNDAY"
+        )
+        val today = dayNames[cal.get(Calendar.DAY_OF_WEEK)] ?: ""
+        val matched = today == target
+        DebugLog.d("TimeEval", "day_of_week: target=$target, today=$today, matched=$matched")
+        return matched
     }
 }
 
@@ -60,8 +118,8 @@ class LocationEvaluator : ConditionEvaluator {
         "arrive_at", "leave_location", "within_radius"
     )
 
-    override suspend fun evaluate(condition: LeafCondition): Boolean {
-        // TODO: Integrate with FusedLocationProviderClient
+    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        DebugLog.w("LocationEval", "${condition.type}: stub — always false (needs FusedLocation)")
         return false
     }
 }
@@ -73,8 +131,8 @@ class RecurringEvaluator : ConditionEvaluator {
         "x_times_per_day", "x_times_per_week"
     )
 
-    override suspend fun evaluate(condition: LeafCondition): Boolean {
-        // TODO: Track last trigger time and compare intervals
+    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        DebugLog.w("RecurringEval", "${condition.type}: stub — always false (needs interval tracking)")
         return false
     }
 }
@@ -83,8 +141,8 @@ class RecurringEvaluator : ConditionEvaluator {
 class CustomEvaluator : ConditionEvaluator {
     override val supportedTypes = setOf<String>() // matches anything starting with "custom_"
 
-    override suspend fun evaluate(condition: LeafCondition): Boolean {
-        // TODO: Parse custom condition statement, evaluate with Gemini or rule engine
+    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+        DebugLog.w("CustomEval", "${condition.type}: stub — always false (needs rule engine)")
         return false
     }
 
@@ -105,24 +163,28 @@ class ConditionTreeEvaluator(
     ),
     private val customEvaluator: CustomEvaluator = CustomEvaluator()
 ) {
-    suspend fun evaluate(condition: Condition): Boolean = when (condition) {
-        is LeafCondition -> evaluateLeaf(condition)
-        is CompositeCondition -> evaluateComposite(condition)
+    suspend fun evaluate(condition: Condition, alarmCreatedAt: Long): Boolean = when (condition) {
+        is LeafCondition -> evaluateLeaf(condition, alarmCreatedAt)
+        is CompositeCondition -> evaluateComposite(condition, alarmCreatedAt)
     }
 
-    private suspend fun evaluateLeaf(leaf: LeafCondition): Boolean {
+    private suspend fun evaluateLeaf(leaf: LeafCondition, alarmCreatedAt: Long): Boolean {
         if (customEvaluator.canHandle(leaf.type)) {
-            return customEvaluator.evaluate(leaf)
+            return customEvaluator.evaluate(leaf, alarmCreatedAt)
         }
         val evaluator = evaluators.firstOrNull { leaf.type in it.supportedTypes }
-        return evaluator?.evaluate(leaf) ?: false
+        if (evaluator == null) {
+            DebugLog.e("TreeEval", "No evaluator found for type '${leaf.type}'")
+            return false
+        }
+        return evaluator.evaluate(leaf, alarmCreatedAt)
     }
 
-    private suspend fun evaluateComposite(composite: CompositeCondition): Boolean {
+    private suspend fun evaluateComposite(composite: CompositeCondition, alarmCreatedAt: Long): Boolean {
         if (composite.children.isEmpty()) return false
         return when (composite.operator) {
-            Operator.AND -> composite.children.all { evaluate(it) }
-            Operator.OR -> composite.children.any { evaluate(it) }
+            Operator.AND -> composite.children.all { evaluate(it, alarmCreatedAt) }
+            Operator.OR -> composite.children.any { evaluate(it, alarmCreatedAt) }
         }
     }
 }

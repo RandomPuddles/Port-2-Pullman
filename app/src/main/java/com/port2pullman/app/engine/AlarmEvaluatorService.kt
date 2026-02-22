@@ -7,6 +7,7 @@ import androidx.core.app.NotificationCompat
 import com.port2pullman.app.App
 import com.port2pullman.app.MainActivity
 import com.port2pullman.app.data.AlarmRepositoryImpl
+import com.port2pullman.app.debug.DebugLog
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
@@ -21,7 +22,7 @@ class AlarmEvaluatorService : Service() {
         const val CHANNEL_ID = "alarm_service"
         const val CHANNEL_NAME = "Alarm Monitor"
         const val NOTIFICATION_ID = 1001
-        private const val EVAL_INTERVAL_MS = 60_000L // 1 minute
+        private const val EVAL_INTERVAL_MS = 15_000L // 15 seconds for responsive triggering
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -31,6 +32,7 @@ class AlarmEvaluatorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        DebugLog.i("EvalService", "Service onCreate")
         val app = applicationContext as App
         alarmRepo = app.alarmRepository as AlarmRepositoryImpl
         notificationController = NotificationController(this)
@@ -42,6 +44,7 @@ class AlarmEvaluatorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        DebugLog.i("EvalService", "Service onDestroy")
         scope.cancel()
         super.onDestroy()
     }
@@ -75,10 +78,13 @@ class AlarmEvaluatorService : Service() {
 
     private fun startEvaluationLoop() {
         scope.launch {
+            DebugLog.i("EvalService", "Evaluation loop started (interval=${EVAL_INTERVAL_MS}ms)")
             while (isActive) {
                 try {
                     evaluateAll()
-                } catch (_: Exception) { /* swallow */ }
+                } catch (e: Exception) {
+                    DebugLog.e("EvalService", "Error during evaluation", e)
+                }
                 delay(EVAL_INTERVAL_MS)
             }
         }
@@ -86,12 +92,17 @@ class AlarmEvaluatorService : Service() {
 
     private suspend fun evaluateAll() {
         val alarms = alarmRepo.getAll().first()
-        for (alarm in alarms) {
-            if (!alarm.enabled) continue
-            val triggered = evaluator.evaluate(alarm.rootCondition)
+        val enabled = alarms.filter { it.enabled }
+        DebugLog.d("EvalService", "evaluateAll: ${enabled.size}/${alarms.size} alarms enabled")
+
+        for (alarm in enabled) {
+            val triggered = evaluator.evaluate(alarm.rootCondition, alarm.createdAt)
+            DebugLog.d("EvalService", "Alarm '${alarm.title}' (id=${alarm.id}): triggered=$triggered")
             if (triggered) {
+                DebugLog.i("EvalService", "TRIGGERED: '${alarm.title}'")
                 notificationController.showTriggered(alarm)
                 if (alarm.triggerOnce) {
+                    DebugLog.d("EvalService", "triggerOnce - disabling alarm ${alarm.id}")
                     alarmRepo.setEnabled(listOf(alarm.id), false)
                 }
             }

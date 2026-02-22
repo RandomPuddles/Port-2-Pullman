@@ -35,7 +35,8 @@ class AlarmRepositoryImpl(
         readout = alarm.readout,
         ring = alarm.ring,
         triggerOnce = alarm.triggerOnce,
-        enabled = alarm.enabled
+        enabled = alarm.enabled,
+        createdAt = alarm.createdAt
     )
 
     private fun toDomain(entity: AlarmEntity) = Alarm(
@@ -45,6 +46,7 @@ class AlarmRepositoryImpl(
         readout = entity.readout,
         ring = entity.ring,
         triggerOnce = entity.triggerOnce,
-        enabled = entity.enabled
+        enabled = entity.enabled,
+        createdAt = entity.createdAt
     )
 }

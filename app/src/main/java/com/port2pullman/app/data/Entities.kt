@@ -12,7 +12,8 @@ data class AlarmEntity(
     val readout: Boolean = false,
     val ring: Boolean = false,
     val triggerOnce: Boolean = false,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "custom_conditions")
