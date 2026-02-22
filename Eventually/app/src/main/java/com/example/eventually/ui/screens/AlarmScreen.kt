@@ -6,21 +6,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.eventually.domain.model.AlarmItem
 import com.example.eventually.ui.components.alarm.AlarmEmptyState
 import com.example.eventually.ui.components.alarm.AlarmHeader
 import com.example.eventually.ui.components.alarm.AlarmHeaderState
 import com.example.eventually.ui.components.alarm.AlarmList
+import com.example.eventually.ui.screens.alarm.alarmMenuItems
 
 @Composable
 fun AlarmScreen(
+    alarms: MutableList<AlarmItem>,
     onAddAlarm: () -> Unit = {},
-    onMoreOptions: () -> Unit = {}
 ) {
-    val alarms = remember { mutableStateListOf<AlarmItem>() }
+    var isEditMode by remember { mutableStateOf(false) }
+    val selectedAlarmIds = remember { mutableStateSetOf<String>() }
+
     val headerState = remember(alarms.size) {
         val first = alarms.firstOrNull()
         AlarmHeaderState(
@@ -37,7 +44,21 @@ fun AlarmScreen(
         AlarmHeader(
             state = headerState,
             onAddClick = onAddAlarm,
-            onMoreClick = onMoreOptions
+            menuItems = alarmMenuItems(
+                onEdit = { isEditMode = true },
+                hasAlarms = alarms.isNotEmpty()
+            ),
+            isEditMode = isEditMode,
+            selectedCount = selectedAlarmIds.size,
+            onDoneClick = {
+                isEditMode = false
+                selectedAlarmIds.clear()
+            },
+            onDeleteSelectedClick = {
+                alarms.removeAll { it.id in selectedAlarmIds }
+                selectedAlarmIds.clear()
+                isEditMode = false
+            }
         )
 
         if (alarms.isEmpty()) {
@@ -53,6 +74,15 @@ fun AlarmScreen(
                     val index = alarms.indexOfFirst { it.id == alarm.id }
                     if (index >= 0) {
                         alarms[index] = alarm.copy(isEnabled = enabled)
+                    }
+                },
+                isEditMode = isEditMode,
+                selectedAlarmIds = selectedAlarmIds,
+                onSelectionToggle = { alarm ->
+                    if (alarm.id in selectedAlarmIds) {
+                        selectedAlarmIds.remove(alarm.id)
+                    } else {
+                        selectedAlarmIds.add(alarm.id)
                     }
                 }
             )

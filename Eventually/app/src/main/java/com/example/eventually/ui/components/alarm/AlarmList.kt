@@ -14,6 +14,9 @@ import com.example.eventually.domain.model.AlarmItem
 fun AlarmList(
     alarms: List<AlarmItem>,
     onToggle: (AlarmItem, Boolean) -> Unit,
+    isEditMode: Boolean = false,
+    selectedAlarmIds: Set<String> = emptySet(),
+    onSelectionToggle: (AlarmItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -25,7 +28,10 @@ fun AlarmList(
         items(alarms, key = { it.id }) { alarm ->
             AlarmCard(
                 alarm = alarm,
-                onToggle = { enabled -> onToggle(alarm, enabled) }
+                onToggle = { enabled -> onToggle(alarm, enabled) },
+                isEditMode = isEditMode,
+                isSelected = alarm.id in selectedAlarmIds,
+                onSelectToggle = { onSelectionToggle(alarm) }
             )
         }
     }

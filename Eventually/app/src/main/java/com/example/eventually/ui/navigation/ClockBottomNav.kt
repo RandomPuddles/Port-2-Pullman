@@ -37,7 +37,8 @@ fun ClockBottomNav(
 ) {
     NavigationBar {
         clockNavItems.forEach { item ->
-            val selected = currentRoute == item.route.route
+            val selected = currentRoute == item.route.route ||
+                (item.route == ClockRoute.Alarm && currentRoute == ClockRoute.AlarmAdd.route)
             NavigationBarItem(
                 selected = selected,
                 onClick = { onItemClick(item.route) },
