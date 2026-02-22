@@ -24,3 +24,11 @@ data class CustomConditionEntity(
     val statement: String,
     val refreshFreqJson: String
 )
+
+@Entity(tableName = "trigger_history")
+data class TriggerHistoryEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val alarmId: Long,
+    val triggeredAt: Long = System.currentTimeMillis()
+)

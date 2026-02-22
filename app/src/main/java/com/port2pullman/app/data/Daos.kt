@@ -38,3 +38,22 @@ interface ConditionDao {
     @Query("DELETE FROM custom_conditions WHERE id = :id")
     suspend fun deleteById(id: Long)
 }
+
+@Dao
+interface TriggerHistoryDao {
+    /** Count triggers for a given alarm since [since] epoch-millis. Non-suspend for use from DataSourceResolver. */
+    @Query("SELECT COUNT(*) FROM trigger_history WHERE alarmId = :alarmId AND triggeredAt >= :since")
+    fun countSince(alarmId: Long, since: Long): Int
+
+    /** Record a new trigger timestamp. */
+    @Insert
+    suspend fun insert(entry: TriggerHistoryEntity)
+
+    /** Delete all history for an alarm (e.g. when the alarm is deleted). */
+    @Query("DELETE FROM trigger_history WHERE alarmId = :alarmId")
+    suspend fun deleteForAlarm(alarmId: Long)
+
+    /** Prune entries older than [before] to keep the table small. */
+    @Query("DELETE FROM trigger_history WHERE triggeredAt < :before")
+    suspend fun pruneBefore(before: Long)
+}

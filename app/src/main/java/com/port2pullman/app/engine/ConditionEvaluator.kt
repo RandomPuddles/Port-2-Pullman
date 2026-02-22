@@ -2,6 +2,7 @@ package com.port2pullman.app.engine
 
 import android.content.Context
 import com.port2pullman.app.data.ConditionRegistry
+import com.port2pullman.app.data.TriggerHistoryDao
 import com.port2pullman.app.debug.DebugLog
 import com.port2pullman.app.model.*
 
@@ -22,7 +23,7 @@ class RuleEvaluator(private val resolver: DataSourceResolver) {
     /**
      * Evaluate a single [LeafCondition] against its JSON-declared rule.
      */
-    suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
+    suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long, alarmId: Long = -1): Boolean {
         val def = ConditionRegistry.getMeta(condition.type)
         val rule = def.rule
         if (rule == null) {
@@ -31,7 +32,7 @@ class RuleEvaluator(private val resolver: DataSourceResolver) {
         }
 
         // 1. Resolve the live value from the data source
-        val sourceValue = resolver.resolve(rule.source, alarmStartedAt)
+        val sourceValue = resolver.resolve(rule.source, alarmStartedAt, alarmId)
         if (sourceValue == null) {
             DebugLog.w(TAG, "${condition.type}: source '${rule.source}' returned null — false")
             return false
@@ -139,19 +140,22 @@ class RuleEvaluator(private val resolver: DataSourceResolver) {
 class ConditionTreeEvaluator(
     private val ruleEvaluator: RuleEvaluator,
 ) {
-    /** Secondary constructor for backward compatibility (service creates with Context). */
-    constructor(context: Context) : this(RuleEvaluator(DataSourceResolver(context)))
+    /** Secondary constructor — service creates with Context + optional DAO for limit conditions. */
+    constructor(
+        context: Context,
+        triggerHistoryDao: TriggerHistoryDao? = null,
+    ) : this(RuleEvaluator(DataSourceResolver(context, triggerHistoryDao)))
 
-    suspend fun evaluate(condition: Condition, alarmStartedAt: Long): Boolean = when (condition) {
-        is LeafCondition -> ruleEvaluator.evaluate(condition, alarmStartedAt)
-        is CompositeCondition -> evaluateComposite(condition, alarmStartedAt)
+    suspend fun evaluate(condition: Condition, alarmStartedAt: Long, alarmId: Long = -1): Boolean = when (condition) {
+        is LeafCondition -> ruleEvaluator.evaluate(condition, alarmStartedAt, alarmId)
+        is CompositeCondition -> evaluateComposite(condition, alarmStartedAt, alarmId)
     }
 
-    private suspend fun evaluateComposite(composite: CompositeCondition, alarmStartedAt: Long): Boolean {
+    private suspend fun evaluateComposite(composite: CompositeCondition, alarmStartedAt: Long, alarmId: Long): Boolean {
         if (composite.children.isEmpty()) return false
         return when (composite.operator) {
-            Operator.AND -> composite.children.all { evaluate(it, alarmStartedAt) }
-            Operator.OR -> composite.children.any { evaluate(it, alarmStartedAt) }
+            Operator.AND -> composite.children.all { evaluate(it, alarmStartedAt, alarmId) }
+            Operator.OR -> composite.children.any { evaluate(it, alarmStartedAt, alarmId) }
         }
     }
 }

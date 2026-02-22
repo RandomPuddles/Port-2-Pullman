@@ -18,6 +18,8 @@ class App : Application() {
         ConditionRepositoryImpl(database.conditionDao())
     }
 
+    val triggerHistoryDao by lazy { database.triggerHistoryDao() }
+
     override fun onCreate() {
         super.onCreate()
         // Parse the condition catalog from res/raw/conditions.json

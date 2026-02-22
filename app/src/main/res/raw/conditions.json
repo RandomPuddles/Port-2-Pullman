@@ -178,6 +178,48 @@
           "probeKeys": ["recurring.timesThisWeek"]
         }
       ]
+    },
+    {
+      "name": "Limits",
+      "icon": "block",
+      "categoryKey": "limit",
+      "conditions": [
+        {
+          "type": "limit_per_minute", "label": "Limit per minute", "hasNum": true, "unit": "triggers",
+          "placeholder": "max triggers",
+          "rule": { "source": "limit.triggersInLastMinute", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["limit.triggersInLastMinute"]
+        },
+        {
+          "type": "limit_per_hour", "label": "Limit per hour", "hasNum": true, "unit": "triggers",
+          "placeholder": "max triggers",
+          "rule": { "source": "limit.triggersInLastHour", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["limit.triggersInLastHour"]
+        },
+        {
+          "type": "limit_per_day", "label": "Limit per day", "hasNum": true, "unit": "triggers",
+          "placeholder": "max triggers",
+          "rule": { "source": "limit.triggersInLastDay", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["limit.triggersInLastDay"]
+        },
+        {
+          "type": "limit_per_week", "label": "Limit per week", "hasNum": true, "unit": "triggers",
+          "placeholder": "max triggers",
+          "rule": { "source": "limit.triggersInLastWeek", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["limit.triggersInLastWeek"]
+        },
+        {
+          "type": "limit_per_month", "label": "Limit per month", "hasNum": true, "unit": "triggers",
+          "placeholder": "max triggers",
+          "rule": { "source": "limit.triggersInLastMonth", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["limit.triggersInLastMonth"]
+        }
+      ]
     }
   ]
 }

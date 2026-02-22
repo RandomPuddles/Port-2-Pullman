@@ -6,13 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [AlarmEntity::class, CustomConditionEntity::class],
-    version = 3,
+    entities = [AlarmEntity::class, CustomConditionEntity::class, TriggerHistoryEntity::class],
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun alarmDao(): AlarmDao
     abstract fun conditionDao(): ConditionDao
+    abstract fun triggerHistoryDao(): TriggerHistoryDao
 
     companion object {
         @Volatile

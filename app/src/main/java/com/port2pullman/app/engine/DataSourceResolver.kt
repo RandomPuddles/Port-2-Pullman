@@ -11,6 +11,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import androidx.core.content.ContextCompat
+import com.port2pullman.app.data.TriggerHistoryDao
 import com.port2pullman.app.debug.DebugLog
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -30,7 +31,10 @@ import java.util.Locale
  * Returns `null` when the value cannot be obtained (missing permission,
  * unavailable provider, unimplemented source, etc.).
  */
-class DataSourceResolver(private val context: Context) {
+class DataSourceResolver(
+    private val context: Context,
+    private val triggerHistoryDao: TriggerHistoryDao? = null,
+) {
 
     companion object {
         private const val TAG = "DataSource"
@@ -40,9 +44,10 @@ class DataSourceResolver(private val context: Context) {
      * Resolve a single source key.
      * @param key            the data-source key from the JSON rule
      * @param alarmStartedAt epoch-millis when the alarm was last enabled/triggered
+     * @param alarmId        the alarm's database ID (needed for limit conditions)
      * @return the resolved value, or `null` on failure
      */
-    fun resolve(key: String, alarmStartedAt: Long): Any? = try {
+    fun resolve(key: String, alarmStartedAt: Long, alarmId: Long = -1): Any? = try {
         when (key) {
             // ── Device ──────────────────────────────────────────────
             "device.batteryPercent" -> resolveBatteryPercent()
@@ -88,6 +93,13 @@ class DataSourceResolver(private val context: Context) {
                 DebugLog.w(TAG, "$key: stub — needs interval tracking")
                 null
             }
+
+            // ── Limits ──────────────────────────────────────────────
+            "limit.triggersInLastMinute" -> resolveTriggerCount(alarmId, 60_000L)
+            "limit.triggersInLastHour"   -> resolveTriggerCount(alarmId, 3_600_000L)
+            "limit.triggersInLastDay"    -> resolveTriggerCount(alarmId, 86_400_000L)
+            "limit.triggersInLastWeek"   -> resolveTriggerCount(alarmId, 604_800_000L)
+            "limit.triggersInLastMonth"  -> resolveTriggerCount(alarmId, 2_592_000_000L)
 
             else -> {
                 DebugLog.w(TAG, "Unknown source key: $key")
@@ -213,4 +225,22 @@ class DataSourceResolver(private val context: Context) {
 
     private fun hasPerm(perm: String): Boolean =
         ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+
+    // ─── Limit helpers ──────────────────────────────────────────────
+
+    /**
+     * Query [TriggerHistoryDao] for number of triggers within [windowMs]
+     * milliseconds.  Returns `null` when unavailable (no DAO or no alarm ID).
+     */
+    private fun resolveTriggerCount(alarmId: Long, windowMs: Long): Int? {
+        val dao = triggerHistoryDao ?: run {
+            DebugLog.w(TAG, "No TriggerHistoryDao — limit conditions unavailable")
+            return null
+        }
+        if (alarmId < 0) {
+            DebugLog.w(TAG, "No alarmId — limit conditions unavailable")
+            return null
+        }
+        return dao.countSince(alarmId, System.currentTimeMillis() - windowMs)
+    }
 }

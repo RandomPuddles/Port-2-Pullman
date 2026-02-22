@@ -7,6 +7,8 @@ import androidx.core.app.NotificationCompat
 import com.port2pullman.app.App
 import com.port2pullman.app.MainActivity
 import com.port2pullman.app.data.AlarmRepositoryImpl
+import com.port2pullman.app.data.TriggerHistoryDao
+import com.port2pullman.app.data.TriggerHistoryEntity
 import com.port2pullman.app.debug.DebugLog
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
@@ -29,14 +31,16 @@ class AlarmEvaluatorService : Service() {
     private lateinit var notificationController: NotificationController
     private lateinit var alarmRepo: AlarmRepositoryImpl
     private lateinit var evaluator: ConditionTreeEvaluator
+    private lateinit var triggerHistoryDao: TriggerHistoryDao
 
     override fun onCreate() {
         super.onCreate()
         DebugLog.i("EvalService", "Service onCreate")
         val app = applicationContext as App
         alarmRepo = app.alarmRepository as AlarmRepositoryImpl
+        triggerHistoryDao = app.triggerHistoryDao
         notificationController = NotificationController(this)
-        evaluator = ConditionTreeEvaluator(this)
+        evaluator = ConditionTreeEvaluator(this, triggerHistoryDao)
         createChannel()
         startForeground(NOTIFICATION_ID, buildForegroundNotification())
         startEvaluationLoop()
@@ -97,11 +101,14 @@ class AlarmEvaluatorService : Service() {
         DebugLog.d("EvalService", "evaluateAll: ${enabled.size}/${alarms.size} alarms enabled")
 
         for (alarm in enabled) {
-            val triggered = evaluator.evaluate(alarm.rootCondition, alarm.lastStartedAt)
+            val triggered = evaluator.evaluate(alarm.rootCondition, alarm.lastStartedAt, alarm.id)
             DebugLog.d("EvalService", "Alarm '${alarm.title}' (id=${alarm.id}): triggered=$triggered")
             if (triggered) {
                 DebugLog.i("EvalService", "TRIGGERED: '${alarm.title}'")
                 notificationController.showTriggered(alarm)
+                // Record trigger in history for limit conditions
+                triggerHistoryDao.insert(TriggerHistoryEntity(alarmId = alarm.id))
+                DebugLog.d("EvalService", "Recorded trigger history for alarm ${alarm.id}")
                 // Reset the reference time so time-based conditions
                 // don't keep triggering on every evaluation cycle
                 alarmRepo.resetLastStartedAt(alarm.id)
