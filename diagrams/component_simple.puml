@@ -1,75 +1,65 @@
 @startuml Conditional Alarms – Simple Component Diagram
 title Conditional Alarms · Component Overview
 
-skinparam defaultFontName Roboto
-skinparam defaultFontSize 13
-skinparam componentStyle rectangle
-skinparam ArrowColor #336699
-skinparam ArrowFontSize 11
+skinparam defaultFontName  Roboto
+skinparam defaultFontSize  13
+skinparam componentStyle   rectangle
+skinparam ArrowColor       #336699
+skinparam ArrowFontSize    11
 
 skinparam package {
   BackgroundColor #F0F4F8
-  BorderColor #5C8A8A
-  FontStyle bold
-  FontSize 14
+  BorderColor     #5C8A8A
+  FontStyle       bold
+  FontSize        14
 }
 skinparam component {
   BackgroundColor #DDEEFF
-  BorderColor #336699
+  BorderColor     #336699
 }
 skinparam note {
   BackgroundColor #FAFAFA
-  BorderColor #AAAAAA
-  FontSize 11
+  BorderColor     #AAAAAA
+  FontSize        11
 }
 
 ' ═══════════════════════════════════════════════
-'  ROW 1 – UI Screens (left → right)
+'  ROW 1 – UI Screens
 ' ═══════════════════════════════════════════════
 
 package "Home Screen" as PKG_HOME {
-  component [Alarm List\n─────────────\nBrowse all alarms\nEnable / Disable toggle] as AlarmList
-  component [Search Bar\n─────────────\nFilter by title\nor condition text] as SearchBar
+  component [Alarm List\n─────────────\nBrowse · Search · Enable / Disable\nSelect mode (bulk toggle / delete)\nCreate (+) · Edit (tap) · AI (sparkle)] as AlarmList
 }
 
-package "Alarm Setup Screen" as PKG_SETUP {
-  component [Title Field\n─────────────\nEnter / edit alarm title] as TitleField
-  component [Condition List\n─────────────\nOrdered blocks with AND/OR chips\nDrag to reorder · tap × to remove\nTap value badge to set number] as CondList
-  component [Options\n─────────────\nReadout (TTS)\nRing (audio loop)\nTrigger Once] as Options
-  component [+ Add Condition\n─────────────\nOpens Condition Browser] as AddCondBtn
+package "Alarm Setup" as PKG_SETUP {
+  component [Alarm Editor\n─────────────\nTitle · Condition blocks\nBool operators (AND / OR)\nNumerical value · Drag reorder\nReadout · Ring · Trigger Once] as AlarmEditor
 }
 
 package "Condition Browser" as PKG_BROWSER {
-  component [Category Grid\n─────────────\nWeather · Device Attributes\nTime/Date · Location\nRecurring Schedule · Custom] as CatGrid
-  component [Condition Picker\n─────────────\nConditions within a category\nTap to select & return] as CondPicker
-  component [Custom Condition Editor\n─────────────\nTitle · Statement\nRefresh Frequency\nCreate · Modify · Delete\n(custom conditions only)] as CustomEditor
+  component [Category Grid & Picker\n─────────────\nWeather · Device · Time / Date\nLocation · Schedule · Custom\nTap condition → return to Setup] as CondPicker
+  component [Custom Condition Editor\n─────────────\nTitle · Statement · Refresh Freq\nCreate · Modify · Delete] as CustomEditor
 }
 
 ' ═══════════════════════════════════════════════
-'  ROW 2 – AI (sits below Home / Setup)
+'  ROW 2 – AI · Storage · Engine
 ' ═══════════════════════════════════════════════
 
 package "AI Alarm Creator" as PKG_AI {
-  component [AI Prompt Dialog\n─────────────\nFree-text "Write prompt…"\nOpens from Home or Setup] as AIDialog
-  component [AI Service\n─────────────\nCalls AI API with prompt\nReturns alarm draft\nfor review in Setup Screen] as AISvc
+  component [AI Prompt\n─────────────\nFree-text prompt\n→ alarm draft for review] as AIPrompt
 }
 
-' ═══════════════════════════════════════════════
-'  ROW 3 – Data (storage + engine side by side)
-' ═══════════════════════════════════════════════
-
 package "Alarm Storage" as PKG_STORAGE {
-  component [Alarm Repository\n─────────────\nSave · Load · Delete alarms\nEnable / Disable (single or bulk)\nPersist condition order] as AlarmRepo
-  component [Condition Repository\n─────────────\nBuilt-in condition catalogue\nSave · Load · Delete\ncustom conditions] as CondRepo
+  component [Alarm Repository\n─────────────\nSave · Load · Delete alarms\nEnable / Disable (single & bulk)\nPersist condition order] as AlarmRepo
+  component [Condition Repository\n─────────────\nBuilt-in category catalogue\nCustom condition CRUD] as CondRepo
 }
 
 package "Alarm Engine  (background)" as PKG_ENGINE {
-  component [Condition Evaluator\n─────────────\nChecks each type per alarm:\nWeather · Device · Time\nLocation · Recurring · Custom\nRespects AND / OR operators] as Evaluator
-  component [Notification Controller\n─────────────\nPing  → silent notification\nRing  → audio loop until dismissed\nReadout → TTS reads title aloud\nTrigger Once → auto-disables alarm] as Notifier
+  component [Condition Evaluator\n─────────────\nPer-type checks:\nWeather · Device · Time\nLocation · Schedule · Custom\nRespects AND / OR] as Evaluator
+  component [Notification Controller\n─────────────\nPing · Ring · Readout (TTS)\nTrigger Once → auto-disable] as Notifier
 }
 
 ' ═══════════════════════════════════════════════
-'  LAYOUT GUIDES  (hidden arrows enforce columns)
+'  LAYOUT GUIDES
 ' ═══════════════════════════════════════════════
 
 PKG_HOME    -[hidden]right- PKG_SETUP
@@ -84,37 +74,33 @@ PKG_BROWSER -[hidden]down-  PKG_ENGINE
 '  CONNECTIONS
 ' ═══════════════════════════════════════════════
 
+' Home ↔ Setup
+AlarmList   -right->  AlarmEditor : create / edit alarm
+
 ' Home → Storage
-AlarmList  -down-> AlarmRepo : load · toggle enabled
-SearchBar  -down-> AlarmRepo : search by title & condition
+AlarmList   -down->   AlarmRepo   : load · search · toggle · delete
 
 ' Setup → Storage
-TitleField -down-> AlarmRepo : save title
-CondList   -down-> AlarmRepo : save order & operators
-Options    -down-> AlarmRepo : save readout / ring / once
+AlarmEditor -down->   AlarmRepo   : save / update alarm
 
-' Setup → Browser
-AddCondBtn -right-> CatGrid  : open
-
-' Browser internal
-CatGrid    -right-> CondPicker   : show conditions
-CatGrid    -down->  CustomEditor : open editor
-
-' Browser → Setup (return)
-CondPicker -left-> CondList : add / replace condition
+' Setup ↔ Browser
+AlarmEditor -right->  CondPicker  : + add condition
+CondPicker  -left->   AlarmEditor : return selected condition
 
 ' Browser → Storage
-CatGrid      -down-> CondRepo : load built-in categories
-CustomEditor -down-> CondRepo : create / modify / delete
+CondPicker   -down->  CondRepo    : load categories
+CustomEditor -down->  CondRepo    : create / modify / delete
+
+' Browser internal
+CondPicker -down-> CustomEditor   : open editor (Custom category)
 
 ' AI flow
-AIDialog -right-> AISvc    : send prompt
-AISvc    -down->  AlarmRepo : pre-fill Setup Screen draft
+AlarmList -down->  AIPrompt       : open AI prompt
+AIPrompt  -right-> AlarmEditor    : pass draft for review
 
 ' Engine flow
-Evaluator -left->  AlarmRepo : observe enabled alarms
-Evaluator -right-> CondRepo  : fetch condition definitions
-Evaluator -right-> Notifier  : trigger on match
+Evaluator -left->  AlarmRepo      : observe enabled alarms\nauto-disable trigger-once
+Evaluator -right-> Notifier       : trigger on match
 
 ' ═══════════════════════════════════════════════
 '  NOTES
@@ -122,14 +108,8 @@ Evaluator -right-> Notifier  : trigger on match
 
 note bottom of CustomEditor
   Only custom conditions can be
-  modified or deleted. They are
-  saved to the "Custom" category
-  and reusable in future alarms.
-end note
-
-note bottom of AISvc
-  AI draft is loaded into Setup Screen
-  for the user to review before saving.
+  modified or deleted. Saved to
+  "Custom" category for reuse.
 end note
 
 note bottom of Notifier
