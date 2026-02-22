@@ -148,6 +148,18 @@
       "categoryKey": "recurring",
       "conditions": [
         {
+          "type": "every_x_seconds", "label": "Every X seconds", "hasNum": true, "unit": "sec",
+          "rule": { "source": "time.elapsedSeconds", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedSeconds"]
+        },
+        {
+          "type": "every_x_minutes", "label": "Every X minutes", "hasNum": true, "unit": "min",
+          "rule": { "source": "time.elapsedMinutes", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedMinutes"]
+        },
+        {
           "type": "every_x_hours", "label": "Every X hours", "hasNum": true, "unit": "hrs",
           "rule": { "source": "time.elapsedHours", "op": ">=", "valueRef": "user.value" },
           "requiresPermissions": [],
