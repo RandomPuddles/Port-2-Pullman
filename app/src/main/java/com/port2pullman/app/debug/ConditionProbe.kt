@@ -3,8 +3,10 @@ package com.port2pullman.app.debug
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import com.port2pullman.app.App
 import com.port2pullman.app.data.ConditionRegistry
 import com.port2pullman.app.engine.DataSourceResolver
+import com.port2pullman.app.engine.WeatherProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -33,7 +35,12 @@ object ConditionProbe {
      * in the catalog.
      */
     suspend fun probeAll(context: Context): List<ProbeResult> = withContext(Dispatchers.IO) {
-        val resolver = DataSourceResolver(context)
+        // Ensure weather cache is populated before probing
+        WeatherProvider.fetchNow(context)
+
+        // Pass TriggerHistoryDao so limit/recurring probes can resolve
+        val dao = (context.applicationContext as? App)?.triggerHistoryDao
+        val resolver = DataSourceResolver(context, dao)
         val results = mutableListOf<ProbeResult>()
 
         for ((type, def) in ConditionRegistry.definitions) {
@@ -135,6 +142,7 @@ object ConditionProbe {
         "time" -> "Time / Date"
         "location" -> "Location"
         "recurring" -> "Recurring Schedule"
+        "limit" -> "Limit"
         else -> key.replaceFirstChar { it.uppercase() }
     }
 }

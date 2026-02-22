@@ -75,24 +75,20 @@ class DataSourceResolver(
             "location.accuracy"     -> resolveLocationAccuracy()
             "location.distanceToMi" -> null // needs target coords from condition value
 
-            // ── Weather (stub) ──────────────────────────────────────
-            "weather.temperatureF",
-            "weather.rainExpected",
-            "weather.snowExpected",
-            "weather.windSpeedMph",
-            "weather.humidityPercent" -> {
-                DebugLog.w(TAG, "$key: stub — needs weather API integration")
-                null
-            }
+            // ── Weather (Open-Meteo) ──────────────────────────────────
+            "weather.temperatureF"    -> { WeatherProvider.ensureFresh(context); WeatherProvider.temperatureF }
+            "weather.humidityPercent" -> { WeatherProvider.ensureFresh(context); WeatherProvider.humidityPercent }
+            "weather.rainExpected"    -> { WeatherProvider.ensureFresh(context); WeatherProvider.rainExpected }
+            "weather.snowExpected"    -> { WeatherProvider.ensureFresh(context); WeatherProvider.snowExpected }
+            "weather.windSpeedMph"    -> { WeatherProvider.ensureFresh(context); WeatherProvider.windSpeedMph }
+            "weather.rainMm"          -> { WeatherProvider.ensureFresh(context); WeatherProvider.rainMm }
+            "weather.snowfallCm"      -> { WeatherProvider.ensureFresh(context); WeatherProvider.snowfallCm }
 
-            // ── Recurring (stub) ────────────────────────────────────
-            "recurring.timesToday",
-            "recurring.timesTodayRemaining",
-            "recurring.timesThisWeek",
-            "recurring.timesThisWeekRemaining" -> {
-                DebugLog.w(TAG, "$key: stub — needs interval tracking")
-                null
-            }
+            // ── Recurring ────────────────────────────────────────────
+            "recurring.timesToday"              -> resolveTriggersInPeriod(alarmId, startOfToday())
+            "recurring.timesTodayRemaining"     -> null // computed in evaluator from timesToday
+            "recurring.timesThisWeek"           -> resolveTriggersInPeriod(alarmId, startOfThisWeek())
+            "recurring.timesThisWeekRemaining"  -> null // computed in evaluator from timesThisWeek
 
             // ── Limits ──────────────────────────────────────────────
             "limit.triggersInLastMinute" -> resolveTriggerCount(alarmId, 60_000L)
@@ -128,6 +124,7 @@ class DataSourceResolver(
 
     @Suppress("DEPRECATION")
     private fun resolveWifiSsid(): String {
+        if (!hasPerm("android.permission.ACCESS_WIFI_STATE")) return ""
         val wm = context.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
             ?: return ""
@@ -201,30 +198,71 @@ class DataSourceResolver(
     private fun resolveLastLocation(): Pair<Double, Double>? {
         if (!hasPerm(Manifest.permission.ACCESS_FINE_LOCATION) &&
             !hasPerm(Manifest.permission.ACCESS_COARSE_LOCATION)) return null
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            ?: return null
-        val loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            ?: return null
-        return loc.latitude to loc.longitude
+        val loc = getBestLocation()
+        if (loc != null) return loc.latitude to loc.longitude
+        // Fallback: Pullman, WA
+        return 46.7298 to -117.1817
     }
 
     @Suppress("MissingPermission")
     private fun resolveLocationAccuracy(): Float? {
         if (!hasPerm(Manifest.permission.ACCESS_FINE_LOCATION) &&
             !hasPerm(Manifest.permission.ACCESS_COARSE_LOCATION)) return null
+        return getBestLocation()?.accuracy ?: 1000f  // fallback ~1km
+    }
+
+    /**
+     * Try every available location provider for the most recent fix.
+     * FUSED_PROVIDER is tried first (Google Play Services), then GPS,
+     * NETWORK, and finally PASSIVE.
+     */
+    @Suppress("MissingPermission")
+    private fun getBestLocation(): android.location.Location? {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             ?: return null
-        val loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            ?: return null
-        return loc.accuracy
+        val providers = listOf(
+            LocationManager.FUSED_PROVIDER,
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER,
+        )
+        for (p in providers) {
+            try { lm.getLastKnownLocation(p)?.let { return it } } catch (_: Exception) {}
+        }
+        return null
     }
 
     // ─── Utility ────────────────────────────────────────────────────
 
     private fun hasPerm(perm: String): Boolean =
         ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+
+    // ─── Recurring helpers ───────────────────────────────────────────
+
+    private fun resolveTriggersInPeriod(alarmId: Long, sinceMs: Long): Int? {
+        val dao = triggerHistoryDao ?: return null
+        if (alarmId < 0) return 0   // probe context — no alarm, return 0
+        return dao.countSince(alarmId, sinceMs)
+    }
+
+    private fun startOfToday(): Long {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
+
+    private fun startOfThisWeek(): Long {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
 
     // ─── Limit helpers ──────────────────────────────────────────────
 
@@ -237,10 +275,7 @@ class DataSourceResolver(
             DebugLog.w(TAG, "No TriggerHistoryDao — limit conditions unavailable")
             return null
         }
-        if (alarmId < 0) {
-            DebugLog.w(TAG, "No alarmId — limit conditions unavailable")
-            return null
-        }
+        if (alarmId < 0) return 0   // probe context — no alarm, return 0
         return dao.countSince(alarmId, System.currentTimeMillis() - windowMs)
     }
 }
