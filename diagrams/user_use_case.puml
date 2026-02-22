@@ -39,7 +39,11 @@ rectangle "Conditional Alarms" {
   package "Condition Selection" {
     usecase "Browse Condition Categories" as UC_BrowseCat
     usecase "Select Condition\nfrom Category" as UC_SelCond
-    usecase "Configure Condition\nParameters" as UC_ConfParam
+    usecase "Create Custom Condition" as UC_CreateCustom
+    usecase "Enter Custom Condition Title" as UC_CustomTitle
+    usecase "Enter Condition Statement" as UC_CustomStmt
+    usecase "Modify Custom Condition" as UC_ModifyCustom
+    usecase "Delete Custom Condition" as UC_DeleteCustom
   }
 
   note right of UC_BrowseCat
@@ -49,6 +53,18 @@ rectangle "Conditional Alarms" {
     - Time / Date
     - Location
     - Recurring Schedule
+  end note
+
+  note right of UC_CreateCustom
+    Custom conditions are saved to
+    a "Custom" category, available
+    for selection in future alarms.
+  end note
+
+  note right of UC_ModifyCustom
+    Only user-created custom
+    conditions can be modified
+    or deleted.
   end note
 
   ' --- Relationships ---
@@ -81,7 +97,11 @@ rectangle "Conditional Alarms" {
   UC_ModifyCond ..> UC_NumVal : <<extend>>
   UC_ModifyCond ..> UC_BrowseCat : <<extend>>
   UC_BrowseCat ..> UC_SelCond : <<include>>
-  UC_SelCond ..> UC_ConfParam : <<extend>>
+  UC_BrowseCat ..> UC_CreateCustom : <<extend>>
+  UC_BrowseCat ..> UC_ModifyCustom : <<extend>>
+  UC_BrowseCat ..> UC_DeleteCustom : <<extend>>
+  UC_CreateCustom ..> UC_CustomTitle : <<include>>
+  UC_CreateCustom ..> UC_CustomStmt : <<include>>
 }
 
 @enduml
