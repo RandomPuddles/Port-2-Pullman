@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
@@ -32,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -190,6 +192,7 @@ fun CustomConditionDialog(state: AppState, viewModel: AppViewModel) {
                 Spacer(Modifier.height(12.dp))
                 Text("Refresh Frequency", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
+                val freqHasError = state.customCondFreqVal.isNotEmpty() && !state.customCondFreqVal.all { it.isDigit() }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -197,21 +200,24 @@ fun CustomConditionDialog(state: AppState, viewModel: AppViewModel) {
                 ) {
                     OutlinedTextField(
                         value = state.customCondFreqVal,
-                        onValueChange = { viewModel.setCustomCondFreqVal(it) },
+                        onValueChange = { newVal -> viewModel.setCustomCondFreqVal(newVal.filter { it.isDigit() }) },
                         placeholder = { Text("e.g. 5") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = RoundedCornerShape(16.dp),
+                        isError = freqHasError,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                            focusedBorderColor = if (freqHasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = if (freqHasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant
                         )
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("seconds", "minutes", "hours", "days").forEach { unit ->
                             val selected = state.customCondFreqUnit == unit
+                            val label = if (unit == "hours") "hr" else unit.take(3)
                             Text(
-                                unit.take(3),
+                                label,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
@@ -228,7 +234,7 @@ fun CustomConditionDialog(state: AppState, viewModel: AppViewModel) {
                         viewModel.saveCustomCondition()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = state.customCondTitle.isNotBlank(),
+                    enabled = state.customCondTitle.isNotBlank() && !freqHasError,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Save Condition")
@@ -298,7 +304,7 @@ fun NumValDialog(state: AppState, viewModel: AppViewModel) {
 }
 
 @Composable
-fun ConfirmDeleteDialog(state: AppState, viewModel: AppViewModel) {
+fun ConfirmDeleteDialog(state: AppState, viewModel: AppViewModel, onDeleted: (() -> Unit)? = null) {
     if (!state.showConfirmDelete) return
     Dialog(
         onDismissRequest = { viewModel.cancelConfirmDelete() },
@@ -335,7 +341,10 @@ fun ConfirmDeleteDialog(state: AppState, viewModel: AppViewModel) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
-                        onClick = { viewModel.executePendingDelete() },
+                        onClick = {
+                            viewModel.executePendingDelete()
+                            onDeleted?.invoke()
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text("Delete")
