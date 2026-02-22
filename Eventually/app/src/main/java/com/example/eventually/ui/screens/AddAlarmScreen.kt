@@ -32,6 +32,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -50,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.eventually.domain.model.AlarmItem
 import com.example.eventually.ui.components.alarm.RecurringDaysSelector
+import com.example.eventually.ui.theme.ClockAccent
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -125,6 +128,7 @@ fun AddAlarmScreen(
     var alarmTitle by remember { mutableStateOf("") }
     var selectedSoundUri by remember { mutableStateOf<Uri?>(null) }
     var selectedSoundTitle by remember { mutableStateOf<String?>(null) }
+    var vibrationEnabled by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
     val ringtonePickerLauncher = rememberLauncherForActivityResult(
@@ -294,6 +298,48 @@ fun AddAlarmScreen(
             }
         }
 
+        // Vibration
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Vibration",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (vibrationEnabled) "On" else "Off",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = vibrationEnabled,
+                    onCheckedChange = { vibrationEnabled = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = ClockAccent,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                )
+            }
+        }
+
         // Alarm name (optional)
         OutlinedTextField(
             value = alarmTitle,
@@ -362,6 +408,7 @@ fun AddAlarmScreen(
                             label = label,
                             title = alarmTitle.trim(),
                             alarmSoundUri = selectedSoundUri?.toString(),
+                            vibration = vibrationEnabled,
                             isEnabled = true,
                             isRecurring = isRecurring,
                             recurringDays = selectedDays,
