@@ -5,6 +5,7 @@ data class AlarmItem(
     val time: String,
     val label: String,
     val title: String = "",
+    val alarmSoundUri: String? = null,
     val isEnabled: Boolean,
     val isRecurring: Boolean = false,
     val recurringDays: Set<Int> = emptySet(),

@@ -1,5 +1,11 @@
 package com.example.eventually.ui.screens
 
+import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
+import androidx.core.content.IntentCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -38,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.eventually.domain.model.AlarmItem
@@ -115,6 +123,20 @@ fun AddAlarmScreen(
     var selectedDays by remember { mutableStateOf(setOf<Int>()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var alarmTitle by remember { mutableStateOf("") }
+    var selectedSoundUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedSoundTitle by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val ringtonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        result.data?.let { intent ->
+            IntentCompat.getParcelableExtra(intent, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+        }?.let { uri ->
+            selectedSoundUri = uri
+            selectedSoundTitle = RingtoneManager.getRingtone(context, uri)?.getTitle(context)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -224,6 +246,54 @@ fun AddAlarmScreen(
             }
         }
 
+        // Alarm sound
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable {
+                    ringtonePickerLauncher.launch(
+                        Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select alarm sound")
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, selectedSoundUri)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                        }
+                    )
+                },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.padding(horizontal = 12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Alarm sound",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = selectedSoundTitle ?: "Default",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         // Alarm name (optional)
         OutlinedTextField(
             value = alarmTitle,
@@ -291,6 +361,7 @@ fun AddAlarmScreen(
                             time = timeString,
                             label = label,
                             title = alarmTitle.trim(),
+                            alarmSoundUri = selectedSoundUri?.toString(),
                             isEnabled = true,
                             isRecurring = isRecurring,
                             recurringDays = selectedDays,
