@@ -12,17 +12,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 private val TerminalBg = Color(0xFF1E1E2E)
 private val TerminalText = Color(0xFFCDD6F4)
@@ -32,6 +36,7 @@ private val WarnColor = Color(0xFFF9E2AF)
 private val ErrorColor = Color(0xFFF38BA8)
 private val TagColor = Color(0xFFCBA6F7)   // Purple for tags
 private val TimestampColor = Color(0xFF6C7086)
+private val StubColor = Color(0xFFFAB387)  // Peach for stubs
 
 @Composable
 fun DebugConsoleScreen(
@@ -40,10 +45,12 @@ fun DebugConsoleScreen(
     val entries by DebugLog.entries.collectAsState()
     val listState = rememberLazyListState()
     val clipboardManager = LocalClipboardManager.current
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Logs", "API Debug")
 
-    // Auto-scroll to bottom on new entries
+    // Auto-scroll log to bottom on new entries
     LaunchedEffect(entries.size) {
-        if (entries.isNotEmpty()) {
+        if (entries.isNotEmpty() && selectedTab == 0) {
             listState.animateScrollToItem(entries.size - 1)
         }
     }
@@ -51,87 +58,348 @@ fun DebugConsoleScreen(
     Scaffold(
         containerColor = TerminalBg,
         topBar = {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .background(Color(0xFF181825))
                     .statusBarsPadding()
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = TerminalText
-                    )
-                }
-                Text(
-                    "Debug Console",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Medium,
-                        fontFamily = FontFamily.Monospace
-                    ),
-                    color = TagColor,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = {
-                    val text = entries.joinToString("\n") { e ->
-                        "${e.timestamp} ${e.level.name} [${e.tag}] ${e.message}"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = TerminalText
+                        )
                     }
-                    clipboardManager.setText(AnnotatedString(text))
-                }) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = "Copy",
-                        tint = InfoColor,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        "Debug Console",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        color = TagColor,
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Copy", color = InfoColor, fontSize = 13.sp)
+                    if (selectedTab == 0) {
+                        TextButton(onClick = {
+                            val text = entries.joinToString("\n") { e ->
+                                "${e.timestamp} ${e.level.name} [${e.tag}] ${e.message}"
+                            }
+                            clipboardManager.setText(AnnotatedString(text))
+                        }) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "Copy",
+                                tint = InfoColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy", color = InfoColor, fontSize = 13.sp)
+                        }
+                        TextButton(onClick = { DebugLog.clear() }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Clear",
+                                tint = ErrorColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Clear", color = ErrorColor, fontSize = 13.sp)
+                        }
+                    }
                 }
-                TextButton(onClick = { DebugLog.clear() }) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Clear",
-                        tint = ErrorColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Clear", color = ErrorColor, fontSize = 13.sp)
+                // Tab row
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color(0xFF181825),
+                    contentColor = TagColor,
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    title,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 13.sp
+                                )
+                            },
+                            selectedContentColor = TagColor,
+                            unselectedContentColor = TimestampColor,
+                        )
+                    }
                 }
             }
         }
     ) { padding ->
-        if (entries.isEmpty()) {
+        when (selectedTab) {
+            0 -> LogsTab(entries, listState, padding)
+            1 -> ApiDebugTab(padding)
+        }
+    }
+}
+
+// ─── Logs Tab ───────────────────────────────────────────────────────────
+
+@Composable
+private fun LogsTab(
+    entries: List<DebugLog.Entry>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    padding: PaddingValues,
+) {
+    if (entries.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "No log entries yet.\nInteract with the app to generate logs.",
+                color = TimestampColor,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                lineHeight = 20.sp
+            )
+        }
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 8.dp),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            items(entries) { entry ->
+                LogEntry(entry)
+            }
+        }
+    }
+}
+
+// ─── API Debug Tab ──────────────────────────────────────────────────────
+
+@Composable
+private fun ApiDebugTab(padding: PaddingValues) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var probeResults by remember { mutableStateOf<List<ConditionProbe.ProbeResult>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var lastRefresh by remember { mutableStateOf("—") }
+    val clipboardManager = LocalClipboardManager.current
+
+    // Auto-probe on first display
+    LaunchedEffect(Unit) {
+        loading = true
+        probeResults = ConditionProbe.probeAll(context)
+        lastRefresh = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date())
+        loading = false
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+    ) {
+        // Control bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF181825))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Last refresh: $lastRefresh",
+                color = TimestampColor,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = {
+                val text = probeResults.joinToString("\n") { r ->
+                    "[${r.status}] ${r.category} > ${r.label}: ${r.value}" +
+                            if (r.detail.isNotEmpty()) " (${r.detail})" else ""
+                }
+                clipboardManager.setText(AnnotatedString(text))
+            }) {
+                Icon(Icons.Default.ContentCopy, "Copy", tint = InfoColor,
+                    modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Copy", color = InfoColor, fontSize = 12.sp)
+            }
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        loading = true
+                        probeResults = ConditionProbe.probeAll(context)
+                        lastRefresh = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                            .format(java.util.Date())
+                        loading = false
+                    }
+                },
+                enabled = !loading,
+            ) {
+                Icon(Icons.Default.Refresh, "Refresh", tint = DebugColor,
+                    modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Refresh", color = DebugColor, fontSize = 12.sp)
+            }
+        }
+
+        if (loading && probeResults.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "No log entries yet.\nInteract with the app to generate logs.",
-                    color = TimestampColor,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                    lineHeight = 20.sp
-                )
+                CircularProgressIndicator(color = TagColor, strokeWidth = 2.dp)
             }
         } else {
+            // Group by category
+            val grouped = probeResults.groupBy { it.category }
             LazyColumn(
-                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .padding(horizontal = 8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(entries) { entry ->
-                    LogEntry(entry)
+                grouped.forEach { (category, results) ->
+                    item(key = "header_$category") {
+                        CategoryHeader(category, results)
+                    }
+                    items(results, key = { it.conditionType }) { result ->
+                        ProbeRow(result)
+                    }
+                    item(key = "spacer_$category") {
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CategoryHeader(
+    category: String,
+    results: List<ConditionProbe.ProbeResult>,
+) {
+    val okCount = results.count { it.status == ConditionProbe.Status.OK }
+    val total = results.size
+    val summaryColor = when {
+        okCount == total -> InfoColor
+        okCount > 0 -> WarnColor
+        else -> ErrorColor
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF313244), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            category.uppercase(),
+            color = TagColor,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            "$okCount/$total OK",
+            color = summaryColor,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+        )
+    }
+}
+
+@Composable
+private fun ProbeRow(result: ConditionProbe.ProbeResult) {
+    val statusColor = when (result.status) {
+        ConditionProbe.Status.OK -> InfoColor
+        ConditionProbe.Status.STUB -> StubColor
+        ConditionProbe.Status.NO_PERMISSION -> WarnColor
+        ConditionProbe.Status.UNAVAILABLE -> TimestampColor
+        ConditionProbe.Status.ERROR -> ErrorColor
+    }
+    val statusLabel = when (result.status) {
+        ConditionProbe.Status.OK -> "OK"
+        ConditionProbe.Status.STUB -> "STUB"
+        ConditionProbe.Status.NO_PERMISSION -> "NO_PERM"
+        ConditionProbe.Status.UNAVAILABLE -> "N/A"
+        ConditionProbe.Status.ERROR -> "ERROR"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .let {
+                if (result.status == ConditionProbe.Status.ERROR) {
+                    it.background(ErrorColor.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                } else it
+            }
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Status badge
+            Text(
+                statusLabel,
+                color = statusColor,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                modifier = Modifier
+                    .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 4.dp, vertical = 1.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            // Condition label
+            Text(
+                result.label,
+                color = TerminalText,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.width(8.dp))
+            // Value
+            Text(
+                result.value,
+                color = if (result.status == ConditionProbe.Status.OK) InfoColor else statusColor,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+            )
+        }
+        // Detail line (if present)
+        if (result.detail.isNotEmpty()) {
+            Text(
+                "  └─ ${result.detail}",
+                color = TimestampColor,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
