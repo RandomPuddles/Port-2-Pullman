@@ -11,6 +11,8 @@ import io.ktor.client.engine.android.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 /**
@@ -44,6 +46,7 @@ object WeatherProvider {
     private val client = HttpClient(Android)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var fetchJob: Job? = null
+    private val fetchMutex = Mutex()
 
     /** True when cache is fresh enough. */
     val isFresh: Boolean get() = System.currentTimeMillis() - lastFetchedAt < CACHE_TTL_MS
@@ -62,10 +65,23 @@ object WeatherProvider {
     /**
      * Blocking fetch — used by the debug probe so values are
      * immediately available after the call returns.
+     * @param forceRefresh if true, ignores the cache TTL
      */
-    suspend fun fetchNow(context: Context) {
-        if (isFresh) return
-        fetchWeather(context)
+    suspend fun fetchNow(context: Context, forceRefresh: Boolean = false) {
+        if (!forceRefresh && isFresh) return
+        // Run the fetch in WeatherProvider's own scope so it survives
+        // composition cancellation, but still await the result.
+        try {
+            withContext(NonCancellable) {
+                fetchMutex.withLock {
+                    // Re-check freshness after acquiring the lock
+                    if (!forceRefresh && isFresh) return@withContext
+                    fetchWeather(context)
+                }
+            }
+        } catch (e: CancellationException) {
+            // Caller's scope was cancelled — safe to ignore
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────

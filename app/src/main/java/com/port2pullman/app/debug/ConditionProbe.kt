@@ -11,137 +11,122 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Probes the device for every value used by condition evaluators.
- *
- * Uses [DataSourceResolver] (the same resolver the evaluation engine uses)
- * to read live values, and reads `probeKeys` + `requiresPermissions` from
- * the [ConditionRegistry] JSON catalog.
+ * Probes all unique data-source keys from the condition catalog
+ * and returns one result **per probeKey** (not per condition).
  */
 object ConditionProbe {
 
-    enum class Status { OK, STUB, NO_PERMISSION, UNAVAILABLE, ERROR }
+    enum class Status { OK, STUB, NO_PERMISSION, ERROR }
 
     data class ProbeResult(
-        val conditionType: String,
-        val label: String,
-        val category: String,
+        val key: String,            // e.g. "weather.temperatureF"
+        val category: String,       // e.g. "Weather"
         val status: Status,
         val value: String,          // human-readable current reading
-        val detail: String = "",    // extra context
+        val detail: String = "",    // extra context (error message, etc.)
     )
 
     /**
-     * Run all probes and return one [ProbeResult] per condition type
-     * in the catalog.
+     * Run all probes and return one [ProbeResult] per unique probe key
+     * across the entire condition catalog.
+     *
+     * @param forceRefresh  force-refresh weather cache (ignores TTL)
      */
-    suspend fun probeAll(context: Context): List<ProbeResult> = withContext(Dispatchers.IO) {
-        // Ensure weather cache is populated before probing
-        WeatherProvider.fetchNow(context)
+    suspend fun probeAll(
+        context: Context,
+        forceRefresh: Boolean = false,
+    ): List<ProbeResult> = withContext(Dispatchers.IO) {
+        // Force-refresh weather so new location / stale data is updated
+        WeatherProvider.fetchNow(context, forceRefresh = forceRefresh)
 
-        // Pass TriggerHistoryDao so limit/recurring probes can resolve
         val dao = (context.applicationContext as? App)?.triggerHistoryDao
         val resolver = DataSourceResolver(context, dao)
+
+        // Collect every unique probeKey, grouped by category
+        // LinkedHashMap preserves insertion order (catalog order)
+        val keysByCategory = linkedMapOf<String, MutableSet<String>>()
+        val permsByKey = mutableMapOf<String, List<String>>()
+
+        for ((_, def) in ConditionRegistry.definitions) {
+            val cat = getCategoryLabel(def.categoryKey)
+            val keys = if (def.probeKeys.isNotEmpty()) def.probeKeys
+                       else if (def.rule != null) listOf(def.rule.source)
+                       else continue
+
+            val set = keysByCategory.getOrPut(cat) { linkedSetOf() }
+            for (k in keys) {
+                set += k
+                // Track the strictest permissions needed for this key
+                if (def.requiresPermissions.isNotEmpty() && k !in permsByKey) {
+                    permsByKey[k] = def.requiresPermissions
+                }
+            }
+        }
+
         val results = mutableListOf<ProbeResult>()
 
-        for ((type, def) in ConditionRegistry.definitions) {
-            results += probeCondition(context, resolver, type, def)
+        for ((cat, keys) in keysByCategory) {
+            for (key in keys) {
+                results += probeKey(context, resolver, key, cat, permsByKey[key] ?: emptyList())
+            }
         }
         results
     }
 
-    private fun probeCondition(
+    private fun probeKey(
         context: Context,
         resolver: DataSourceResolver,
-        type: String,
-        def: ConditionRegistry.ConditionDef,
+        key: String,
+        category: String,
+        requiredPerms: List<String>,
     ): ProbeResult {
-        val catLabel = ConditionRegistry.definitions.values
-            .firstOrNull { it.type == type }
-            ?.let { getCategoryLabel(it.categoryKey) } ?: def.categoryKey
-
-        // 1. Check permissions
-        val missingPerms = def.requiresPermissions.filter {
+        // 1. Permission check
+        val missing = requiredPerms.filter {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missingPerms.isNotEmpty()) {
+        if (missing.isNotEmpty()) {
             return ProbeResult(
-                conditionType = type,
-                label = def.label,
-                category = catLabel,
+                key = key,
+                category = category,
                 status = Status.NO_PERMISSION,
                 value = "—",
-                detail = "Missing: ${missingPerms.joinToString(", ") { it.substringAfterLast('.') }}"
+                detail = "Missing: ${missing.joinToString(", ") { it.substringAfterLast('.') }}"
             )
         }
 
-        // 2. No rule = stub
-        if (def.rule == null) {
-            return ProbeResult(type, def.label, catLabel,
-                Status.STUB, "—", "No rule defined")
+        // 2. Resolve
+        val value = try {
+            resolver.resolve(key, System.currentTimeMillis())
+        } catch (e: Exception) {
+            return ProbeResult(key, category, Status.ERROR, "ERR",
+                "${e::class.simpleName}: ${e.message}")
         }
 
-        // 3. Resolve all probeKeys and display their values
-        val probeKeys = def.probeKeys.ifEmpty { listOf(def.rule.source) }
-        val resolvedEntries = mutableListOf<Pair<String, Any?>>()
-        var anyNull = false
-
-        for (key in probeKeys) {
-            val value = try {
-                resolver.resolve(key, System.currentTimeMillis())
-            } catch (e: Exception) {
-                return ProbeResult(type, def.label, catLabel,
-                    Status.ERROR, "ERR", "${e::class.simpleName}: ${e.message}")
-            }
-            resolvedEntries += key to value
-            if (value == null) anyNull = true
+        // 3. Status
+        if (value == null) {
+            return ProbeResult(key, category, Status.STUB, "null")
         }
 
-        // 4. Determine status
-        val status = when {
-            resolvedEntries.all { it.second == null } -> Status.STUB
-            anyNull -> Status.UNAVAILABLE
-            else -> Status.OK
-        }
-
-        // Build display value from the primary source
-        val primaryValue = resolvedEntries.firstOrNull()?.second
-        val displayValue = formatValue(primaryValue, def)
-
-        // Build detail from all resolved probe keys
-        val detail = resolvedEntries.joinToString(" | ") { (k, v) ->
-            val short = k.substringAfterLast('.')
-            "$short=${v ?: "null"}"
-        }
-
-        return ProbeResult(type, def.label, catLabel, status, displayValue, detail)
+        return ProbeResult(key, category, Status.OK, formatValue(value))
     }
 
-    /**
-     * Format a resolved value for human-readable display.
-     */
-    private fun formatValue(value: Any?, def: ConditionRegistry.ConditionDef): String =
-        when {
-            value == null -> "—"
-            value is Boolean -> if (value) "Yes" else "No"
-            value is Number && def.unit.isNotEmpty() -> {
-                val n = value.toDouble()
-                if (n == n.toLong().toDouble()) "${n.toLong()}${def.unit}"
-                else "%.2f%s".format(n, def.unit)
-            }
-            value is Number -> {
-                val n = value.toDouble()
-                if (n == n.toLong().toDouble()) "${n.toLong()}"
-                else "%.2f".format(n)
-            }
-            else -> value.toString()
+    private fun formatValue(value: Any): String = when (value) {
+        is Boolean -> if (value) "true" else "false"
+        is Float -> "%.2f".format(value)
+        is Double -> {
+            if (value == value.toLong().toDouble()) value.toLong().toString()
+            else "%.2f".format(value)
         }
+        is Number -> value.toString()
+        else -> value.toString()
+    }
 
     private fun getCategoryLabel(key: String): String = when (key) {
         "weather" -> "Weather"
         "device" -> "Device"
         "time" -> "Time / Date"
         "location" -> "Location"
-        "recurring" -> "Recurring Schedule"
+        "recurring" -> "Recurring"
         "limit" -> "Limit"
         else -> key.replaceFirstChar { it.uppercase() }
     }

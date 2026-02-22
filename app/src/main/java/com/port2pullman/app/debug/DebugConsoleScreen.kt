@@ -197,13 +197,30 @@ private fun ApiDebugTab(padding: PaddingValues) {
     var lastRefresh by remember { mutableStateOf("—") }
     val clipboardManager = LocalClipboardManager.current
 
-    // Auto-probe on first display
-    LaunchedEffect(Unit) {
+    // Inline suspend helper (runs inside LaunchedEffect's own scope)
+    suspend fun doRefreshSuspend(force: Boolean = false) {
         loading = true
-        probeResults = ConditionProbe.probeAll(context)
-        lastRefresh = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-            .format(java.util.Date())
-        loading = false
+        try {
+            probeResults = ConditionProbe.probeAll(context, forceRefresh = force)
+            lastRefresh = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
+                .format(java.util.Date())
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            throw kotlinx.coroutines.CancellationException("scope cancelled")
+        } catch (e: Exception) {
+            // Probe failed silently — keep previous results
+        } finally {
+            loading = false
+        }
+    }
+
+    // Auto-refresh every 5 seconds while this tab is visible.
+    // Runs in LaunchedEffect's own scope (auto-cancelled on leave).
+    LaunchedEffect(Unit) {
+        doRefreshSuspend(force = true)
+        while (true) {
+            kotlinx.coroutines.delay(5_000L)
+            doRefreshSuspend(force = false)
+        }
     }
 
     Column(
@@ -220,7 +237,7 @@ private fun ApiDebugTab(padding: PaddingValues) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Last refresh: $lastRefresh",
+                "Last: $lastRefresh",
                 color = TimestampColor,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
@@ -228,8 +245,8 @@ private fun ApiDebugTab(padding: PaddingValues) {
             )
             TextButton(onClick = {
                 val text = probeResults.joinToString("\n") { r ->
-                    "[${r.status}] ${r.category} > ${r.label}: ${r.value}" +
-                            if (r.detail.isNotEmpty()) " (${r.detail})" else ""
+                    "[${r.status}] ${r.key} = ${r.value}" +
+                            if (r.detail.isNotEmpty()) "  (${r.detail})" else ""
                 }
                 clipboardManager.setText(AnnotatedString(text))
             }) {
@@ -242,10 +259,12 @@ private fun ApiDebugTab(padding: PaddingValues) {
                 onClick = {
                     scope.launch {
                         loading = true
-                        probeResults = ConditionProbe.probeAll(context)
-                        lastRefresh = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                            .format(java.util.Date())
-                        loading = false
+                        try {
+                            probeResults = ConditionProbe.probeAll(context, forceRefresh = true)
+                            lastRefresh = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
+                                .format(java.util.Date())
+                        } catch (_: Exception) { }
+                        finally { loading = false }
                     }
                 },
                 enabled = !loading,
@@ -272,14 +291,14 @@ private fun ApiDebugTab(padding: PaddingValues) {
                     .fillMaxSize()
                     .padding(horizontal = 8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 grouped.forEach { (category, results) ->
                     item(key = "header_$category") {
                         CategoryHeader(category, results)
                     }
-                    items(results, key = { it.conditionType }) { result ->
-                        ProbeRow(result)
+                    items(results, key = { "${category}_${it.key}" }) { result ->
+                        ProbeKeyRow(result)
                     }
                     item(key = "spacer_$category") {
                         Spacer(Modifier.height(8.dp))
@@ -328,23 +347,21 @@ private fun CategoryHeader(
 }
 
 @Composable
-private fun ProbeRow(result: ConditionProbe.ProbeResult) {
+private fun ProbeKeyRow(result: ConditionProbe.ProbeResult) {
     val statusColor = when (result.status) {
         ConditionProbe.Status.OK -> InfoColor
         ConditionProbe.Status.STUB -> StubColor
         ConditionProbe.Status.NO_PERMISSION -> WarnColor
-        ConditionProbe.Status.UNAVAILABLE -> TimestampColor
         ConditionProbe.Status.ERROR -> ErrorColor
     }
     val statusLabel = when (result.status) {
         ConditionProbe.Status.OK -> "OK"
         ConditionProbe.Status.STUB -> "STUB"
-        ConditionProbe.Status.NO_PERMISSION -> "NO_PERM"
-        ConditionProbe.Status.UNAVAILABLE -> "N/A"
-        ConditionProbe.Status.ERROR -> "ERROR"
+        ConditionProbe.Status.NO_PERMISSION -> "PERM"
+        ConditionProbe.Status.ERROR -> "ERR"
     }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .let {
@@ -352,55 +369,43 @@ private fun ProbeRow(result: ConditionProbe.ProbeResult) {
                     it.background(ErrorColor.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
                 } else it
             }
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Status badge
-            Text(
-                statusLabel,
-                color = statusColor,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 10.sp,
-                modifier = Modifier
-                    .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 4.dp, vertical = 1.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            // Condition label
-            Text(
-                result.label,
-                color = TerminalText,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.width(8.dp))
-            // Value
-            Text(
-                result.value,
-                color = if (result.status == ConditionProbe.Status.OK) InfoColor else statusColor,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-            )
-        }
-        // Detail line (if present)
-        if (result.detail.isNotEmpty()) {
-            Text(
-                "  └─ ${result.detail}",
-                color = TimestampColor,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        // Status badge
+        Text(
+            statusLabel,
+            color = statusColor,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 10.sp,
+            modifier = Modifier
+                .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                .padding(horizontal = 4.dp, vertical = 1.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        // Probe key name
+        Text(
+            result.key,
+            color = TerminalText,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.width(8.dp))
+        // Value (or detail for errors/perms)
+        Text(
+            if (result.detail.isNotEmpty() && result.status != ConditionProbe.Status.OK)
+                result.detail else result.value,
+            color = if (result.status == ConditionProbe.Status.OK) InfoColor else statusColor,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
