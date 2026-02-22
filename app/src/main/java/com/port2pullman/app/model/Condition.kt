@@ -11,7 +11,8 @@ data class LeafCondition(
     val category: String,
     val type: String,
     val label: String,
-    val value: Any? = null
+    val value: Any? = null,
+    val negated: Boolean = false
 ) : Condition()
 
 data class CompositeCondition(

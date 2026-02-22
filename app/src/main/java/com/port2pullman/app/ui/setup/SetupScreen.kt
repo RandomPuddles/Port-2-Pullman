@@ -1,8 +1,12 @@
 package com.port2pullman.app.ui.setup
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -16,7 +20,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.port2pullman.app.model.ConditionMeta
@@ -24,6 +30,8 @@ import com.port2pullman.app.model.LeafCondition
 import com.port2pullman.app.model.Operator
 import com.port2pullman.app.ui.home.ConfirmDeleteDialog
 import com.port2pullman.app.ui.theme.*
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun SetupScreen(
@@ -102,6 +110,7 @@ fun SetupScreen(
                     },
                     onNumVal = { viewModel.openNumVal(it) },
                     onBoolOp = { viewModel.openBoolPopup(it) },
+                    onNegate = { viewModel.toggleNegation(it) },
                 )
 
                 Spacer(Modifier.height(12.dp))
@@ -212,6 +221,7 @@ private fun ConditionsList(
     onModify: (Int) -> Unit,
     onNumVal: (Int) -> Unit,
     onBoolOp: (Int) -> Unit,
+    onNegate: (Int) -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         conditions.forEachIndexed { i, cond ->
@@ -227,6 +237,7 @@ private fun ConditionsList(
                 onTapText = { onModify(i) },
                 onTapNumVal = { onNumVal(i) },
                 onRemove = { onRemove(i) },
+                onNegate = { onNegate(i) },
             )
         }
     }
@@ -259,65 +270,132 @@ private fun ConditionBlock(
     onTapText: () -> Unit,
     onTapNumVal: () -> Unit,
     onRemove: () -> Unit,
+    onNegate: () -> Unit,
 ) {
     val meta = ConditionMeta.get(condition.type)
+    val density = LocalDensity.current
+    val swipeThresholdPx = with(density) { 100.dp.toPx() }
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(1.5.dp, OutlineVariant, RoundedCornerShape(16.dp))
-            .background(SurfaceCard)
-            .padding(horizontal = 10.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Drag handle (visual only – reorder via long-press in real app)
-        DragHandle()
-        Spacer(Modifier.width(8.dp))
-
-        // Condition label (tappable to modify)
-        Text(
-            condition.label,
+        // Background revealed on swipe — red NOT indicator
+        Box(
             modifier = Modifier
-                .weight(1f)
-                .clickable { onTapText() },
-            fontSize = 14.sp,
-            lineHeight = 20.sp
-        )
-
-        // Numerical value badge
-        if (meta.hasNum) {
-            Spacer(Modifier.width(4.dp))
-            val displayVal = when (val v = condition.value) {
-                is Number -> {
-                    val d = v.toDouble()
-                    if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
-                }
-                null -> "—"
-                else -> v.toString()
-            }
-            Surface(
-                modifier = Modifier.clickable { onTapNumVal() },
-                shape = RoundedCornerShape(99.dp),
-                color = PrimaryContainer,
-            ) {
-                Text(
-                    "$displayVal ${meta.unit}",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = OnPrimaryContainer
-                )
-            }
+                .matchParentSize()
+                .background(
+                    if (condition.negated) SurfaceCard else Error.copy(alpha = 0.15f),
+                    RoundedCornerShape(16.dp)
+                ),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                if (condition.negated) "REMOVE NOT" else "ADD NOT",
+                modifier = Modifier.padding(start = 14.dp),
+                color = Error,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+            )
         }
 
-        // Remove button
-        Spacer(Modifier.width(4.dp))
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(30.dp)
+        // Foreground card
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        scope.launch {
+                            // Only allow dragging to the right
+                            val newVal = (offsetX.value + delta).coerceAtLeast(0f)
+                            offsetX.snapTo(newVal)
+                        }
+                    },
+                    onDragStopped = {
+                        scope.launch {
+                            if (offsetX.value >= swipeThresholdPx) {
+                                onNegate()
+                            }
+                            offsetX.animateTo(0f)
+                        }
+                    }
+                )
+                .border(
+                    1.5.dp,
+                    if (condition.negated) Error.copy(alpha = 0.6f) else OutlineVariant,
+                    RoundedCornerShape(16.dp)
+                )
+                .background(SurfaceCard, RoundedCornerShape(16.dp))
+                .padding(horizontal = 10.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Error, modifier = Modifier.size(20.dp))
+            // Drag handle
+            DragHandle()
+            Spacer(Modifier.width(8.dp))
+
+            // NOT badge (appears when negated)
+            if (condition.negated) {
+                Text(
+                    "NOT",
+                    color = Error,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .background(Error.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+
+            // Condition label (tappable to modify)
+            Text(
+                condition.label,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onTapText() },
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
+
+            // Numerical value badge
+            if (meta.hasNum) {
+                Spacer(Modifier.width(4.dp))
+                val displayVal = when (val v = condition.value) {
+                    is Number -> {
+                        val d = v.toDouble()
+                        if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
+                    }
+                    null -> "—"
+                    else -> v.toString()
+                }
+                Surface(
+                    modifier = Modifier.clickable { onTapNumVal() },
+                    shape = RoundedCornerShape(99.dp),
+                    color = PrimaryContainer,
+                ) {
+                    Text(
+                        "$displayVal ${meta.unit}",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = OnPrimaryContainer
+                    )
+                }
+            }
+
+            // Remove button
+            Spacer(Modifier.width(4.dp))
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(30.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Remove", tint = Error, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

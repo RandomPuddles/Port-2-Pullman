@@ -147,7 +147,10 @@ class ConditionTreeEvaluator(
     ) : this(RuleEvaluator(DataSourceResolver(context, triggerHistoryDao)))
 
     suspend fun evaluate(condition: Condition, alarmStartedAt: Long, alarmId: Long = -1): Boolean = when (condition) {
-        is LeafCondition -> ruleEvaluator.evaluate(condition, alarmStartedAt, alarmId)
+        is LeafCondition -> {
+            val result = ruleEvaluator.evaluate(condition, alarmStartedAt, alarmId)
+            if (condition.negated) !result else result
+        }
         is CompositeCondition -> evaluateComposite(condition, alarmStartedAt, alarmId)
     }
 

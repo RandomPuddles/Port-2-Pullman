@@ -184,6 +184,16 @@ class SetupViewModel(
         }
     }
 
+    fun toggleNegation(index: Int) {
+        _state.update { s ->
+            if (index !in s.conditions.indices) return@update s
+            val newConds = s.conditions.toMutableList()
+            newConds[index] = newConds[index].let { it.copy(negated = !it.negated) }
+            DebugLog.d("SetupVM", "toggleNegation($index) → negated=${newConds[index].negated}")
+            s.copy(conditions = newConds)
+        }
+    }
+
     // ─── Numerical Value ─────────────────────────────────────
     fun openNumVal(condIndex: Int) =
         _state.update { it.copy(showNumValPopup = true, numValCondIndex = condIndex) }

@@ -456,7 +456,8 @@ private fun buildConditionSummary(condition: Condition): String = when (conditio
             }
             " $v ${meta.unit}"
         } else ""
-        condition.label + valPart
+        val prefix = if (condition.negated) "NOT " else ""
+        prefix + condition.label + valPart
     }
     is CompositeCondition -> {
         val sep = " ${condition.operator.name} "

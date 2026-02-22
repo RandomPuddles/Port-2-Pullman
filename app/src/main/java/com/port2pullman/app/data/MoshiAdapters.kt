@@ -30,13 +30,14 @@ class ConditionTreeAdapter {
     }
 
     private fun conditionToMap(c: Condition): Map<String, Any?> = when (c) {
-        is LeafCondition -> mapOf(
-            "type" to "leaf",
-            "category" to c.category,
-            "conditionType" to c.type,
-            "label" to c.label,
-            "value" to c.value
-        )
+        is LeafCondition -> buildMap {
+            put("type", "leaf")
+            put("category", c.category)
+            put("conditionType", c.type)
+            put("label", c.label)
+            put("value", c.value)
+            if (c.negated) put("negated", true)
+        }
         is CompositeCondition -> mapOf(
             "type" to "composite",
             "operator" to c.operator.name,
@@ -51,7 +52,8 @@ class ConditionTreeAdapter {
                 category = map["category"] as? String ?: "",
                 type = map["conditionType"] as? String ?: "",
                 label = map["label"] as? String ?: "",
-                value = map["value"]
+                value = map["value"],
+                negated = map["negated"] == true
             )
             "composite" -> {
                 val opStr = map["operator"] as? String ?: "AND"
