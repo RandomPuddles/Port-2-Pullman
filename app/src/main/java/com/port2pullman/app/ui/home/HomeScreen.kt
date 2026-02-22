@@ -147,7 +147,7 @@ private fun NormalTopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "Conditional Alarms",
+            "Eventually",
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.015.sp
