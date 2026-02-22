@@ -28,7 +28,7 @@ class AlarmEvaluatorService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var notificationController: NotificationController
     private lateinit var alarmRepo: AlarmRepositoryImpl
-    private val evaluator = ConditionTreeEvaluator()
+    private lateinit var evaluator: ConditionTreeEvaluator
 
     override fun onCreate() {
         super.onCreate()
@@ -36,6 +36,7 @@ class AlarmEvaluatorService : Service() {
         val app = applicationContext as App
         alarmRepo = app.alarmRepository as AlarmRepositoryImpl
         notificationController = NotificationController(this)
+        evaluator = ConditionTreeEvaluator(this)
         createChannel()
         startForeground(NOTIFICATION_ID, buildForegroundNotification())
         startEvaluationLoop()

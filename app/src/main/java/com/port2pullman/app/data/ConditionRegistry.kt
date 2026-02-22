@@ -10,13 +10,28 @@ import org.json.JSONObject
  * Parses the condition catalog from `res/raw/conditions.json`.
  *
  * This is the single source of truth for built-in condition types,
- * their labels, metadata (hasNum / unit / placeholder), and category
- * groupings.  To add, remove, or edit a condition you only need to
- * touch the JSON file — no Kotlin changes required.
+ * their labels, metadata (hasNum / unit / placeholder), evaluation
+ * rules, required permissions, and probe keys.  To add, remove, or
+ * edit a condition you only need to touch the JSON file.
  */
 object ConditionRegistry {
 
-    /** Metadata for a single condition type, mirroring [ConditionMeta.Meta]. */
+    // ── Rule DSL ─────────────────────────────────────────────────────
+
+    /**
+     * A simple comparator rule read from JSON.
+     * @param source  data-source key, e.g. `"device.batteryPercent"`
+     * @param op      comparison operator: `<`, `>`, `<=`, `>=`, `==`, `!=`
+     * @param valueRef either `"user.value"` (use leaf condition value at runtime),
+     *                 a literal boolean, or a literal number.
+     */
+    data class Rule(
+        val source: String,
+        val op: String,
+        val valueRef: Any,          // "user.value" | Boolean | Number
+    )
+
+    /** Metadata for a single condition type. */
     data class ConditionDef(
         val categoryKey: String,
         val type: String,
@@ -24,17 +39,19 @@ object ConditionRegistry {
         val hasNum: Boolean,
         val unit: String,
         val placeholder: String,
+        val rule: Rule?,
+        val requiresPermissions: List<String>,
+        val probeKeys: List<String>,
     )
 
     /** Parsed category list (ready for the UI). */
     var categories: List<Category> = emptyList()
         private set
 
-    /** Fast type→metadata look-up, populated from the same JSON. */
+    /** Fast type→metadata look-up. */
     var definitions: Map<String, ConditionDef> = emptyMap()
         private set
 
-    /** Whether [init] has been called. */
     @Volatile
     private var loaded = false
 
@@ -75,6 +92,27 @@ object ConditionRegistry {
                     val unit = c.optString("unit", "")
                     val placeholder = c.optString("placeholder", "")
 
+                    // Parse rule object (optional)
+                    val rule = c.optJSONObject("rule")?.let { r ->
+                        Rule(
+                            source = r.getString("source"),
+                            op = r.getString("op"),
+                            valueRef = parseValueRef(r.get("valueRef")),
+                        )
+                    }
+
+                    // Parse permissions array
+                    val perms = mutableListOf<String>()
+                    c.optJSONArray("requiresPermissions")?.let { arr ->
+                        for (k in 0 until arr.length()) perms += arr.getString(k)
+                    }
+
+                    // Parse probe keys array
+                    val probes = mutableListOf<String>()
+                    c.optJSONArray("probeKeys")?.let { arr ->
+                        for (k in 0 until arr.length()) probes += arr.getString(k)
+                    }
+
                     leafs += LeafCondition(
                         category = catKey,
                         type = type,
@@ -88,6 +126,9 @@ object ConditionRegistry {
                         hasNum = hasNum,
                         unit = unit,
                         placeholder = placeholder,
+                        rule = rule,
+                        requiresPermissions = perms,
+                        probeKeys = probes,
                     )
                 }
 
@@ -98,6 +139,14 @@ object ConditionRegistry {
             definitions = defs
             loaded = true
         }
+    }
+
+    /** Convert a JSON valueRef to the appropriate Kotlin type. */
+    private fun parseValueRef(raw: Any): Any = when (raw) {
+        is Boolean -> raw
+        is Number -> raw.toDouble()
+        is String -> raw              // e.g. "user.value"
+        else -> raw.toString()
     }
 
     /**
@@ -112,6 +161,9 @@ object ConditionRegistry {
             hasNum = false,
             unit = "",
             placeholder = "",
+            rule = null,
+            requiresPermissions = emptyList(),
+            probeKeys = emptyList(),
         )
 
     /**

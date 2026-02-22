@@ -1,203 +1,150 @@
 package com.port2pullman.app.engine
 
+import android.content.Context
+import com.port2pullman.app.data.ConditionRegistry
 import com.port2pullman.app.debug.DebugLog
 import com.port2pullman.app.model.*
-import java.util.Calendar
 
 /**
- * Strategy interface for evaluating individual condition types.
+ * Generic rule evaluator that uses the JSON-defined [ConditionRegistry.Rule]
+ * and a [DataSourceResolver] to evaluate any built-in [LeafCondition].
+ *
+ * When a condition type has no rule definition (e.g. `custom_*`) or the
+ * data source returns `null`, evaluation falls through to `false` with
+ * appropriate debug logging.
  */
-interface ConditionEvaluator {
-    /** The set of condition types this evaluator handles. */
-    val supportedTypes: Set<String>
+class RuleEvaluator(private val resolver: DataSourceResolver) {
+
+    companion object {
+        private const val TAG = "RuleEval"
+    }
 
     /**
-     * Evaluate a single [LeafCondition] and return true if it is satisfied.
-     * [alarmStartedAt] is the epoch-millis when the alarm was last started/enabled.
+     * Evaluate a single [LeafCondition] against its JSON-declared rule.
      */
-    suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean
-}
+    suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
+        val def = ConditionRegistry.getMeta(condition.type)
+        val rule = def.rule
+        if (rule == null) {
+            DebugLog.w(TAG, "${condition.type}: no rule defined — always false")
+            return false
+        }
 
-/** Evaluates weather-related conditions (stub – needs real API integration). */
-class WeatherEvaluator : ConditionEvaluator {
-    override val supportedTypes = setOf(
-        "temperature_above", "temperature_below",
-        "rain_expected", "snow_expected",
-        "wind_speed_above", "humidity_above"
-    )
+        // 1. Resolve the live value from the data source
+        val sourceValue = resolver.resolve(rule.source, alarmStartedAt)
+        if (sourceValue == null) {
+            DebugLog.w(TAG, "${condition.type}: source '${rule.source}' returned null — false")
+            return false
+        }
 
-    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        DebugLog.w("WeatherEval", "${condition.type}: stub — always false (needs API key)")
-        return false
+        // 2. Resolve the comparison target
+        val target = resolveTarget(rule.valueRef, condition)
+        if (target == null) {
+            DebugLog.w(TAG, "${condition.type}: could not resolve valueRef '${rule.valueRef}' — false")
+            return false
+        }
+
+        // 3. Apply the comparator
+        val result = compare(sourceValue, rule.op, target)
+
+        DebugLog.d(
+            TAG,
+            "${condition.type}: ${rule.source}=$sourceValue ${rule.op} $target → $result"
+        )
+        return result
     }
-}
 
-/** Evaluates device attribute conditions. */
-class DeviceEvaluator : ConditionEvaluator {
-    override val supportedTypes = setOf(
-        "battery_below", "battery_above",
-        "connected_wifi", "bluetooth_connected", "charging"
-    )
-
-    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        DebugLog.w("DeviceEval", "${condition.type}: stub — always false (needs system APIs)")
-        return false
+    /**
+     * Determine the right-hand side of the comparison.
+     * - `"user.value"` → the value from the [LeafCondition] (provided by the user)
+     * - literal Boolean / Number → used directly
+     */
+    private fun resolveTarget(valueRef: Any, condition: LeafCondition): Any? {
+        if (valueRef is String && valueRef == "user.value") {
+            return condition.value
+        }
+        return valueRef
     }
-}
 
-/** Evaluates time and date conditions — fully implemented. */
-class TimeEvaluator : ConditionEvaluator {
-    override val supportedTypes = setOf(
-        "time_is", "day_of_week", "date_is", "minutes_from_now", "seconds_from_now"
-    )
+    /**
+     * Compare [left] to [right] using the operator [op].
+     * Works with Numbers (compared as Double), Booleans, and Strings.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun compare(left: Any, op: String, right: Any): Boolean {
+        // Boolean comparisons
+        if (left is Boolean || right is Boolean) {
+            val lb = toBool(left)
+            val rb = toBool(right)
+            return when (op) {
+                "==", "eq" -> lb == rb
+                "!=", "ne" -> lb != rb
+                else -> {
+                    DebugLog.w(TAG, "Unsupported op '$op' for booleans")
+                    false
+                }
+            }
+        }
 
-    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        return when (condition.type) {
-            "minutes_from_now" -> evaluateMinutesFromNow(condition, alarmStartedAt)
-            "seconds_from_now" -> evaluateSecondsFromNow(condition, alarmStartedAt)
-            "time_is" -> evaluateTimeIs(condition)
-            "day_of_week" -> evaluateDayOfWeek(condition)
+        // Try numeric comparison
+        val ln = toDouble(left)
+        val rn = toDouble(right)
+        if (ln != null && rn != null) {
+            return when (op) {
+                ">"  -> ln > rn
+                ">=" -> ln >= rn
+                "<"  -> ln < rn
+                "<=" -> ln <= rn
+                "==" -> ln == rn
+                "!=" -> ln != rn
+                else -> {
+                    DebugLog.w(TAG, "Unsupported numeric op '$op'")
+                    false
+                }
+            }
+        }
+
+        // Fall back to string comparison
+        val ls = left.toString()
+        val rs = right.toString()
+        return when (op) {
+            "=="          -> ls.equals(rs, ignoreCase = true)
+            "!="          -> !ls.equals(rs, ignoreCase = true)
+            "contains"    -> ls.contains(rs, ignoreCase = true)
             else -> {
-                DebugLog.w("TimeEval", "${condition.type}: not yet implemented")
+                DebugLog.w(TAG, "Unsupported string op '$op' for '$ls' vs '$rs'")
                 false
             }
         }
     }
 
-    private fun evaluateMinutesFromNow(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        val minutes = when (val v = condition.value) {
-            is Number -> v.toDouble()
-            is String -> v.toDoubleOrNull() ?: 0.0
-            else -> 0.0
-        }
-        val targetTime = alarmStartedAt + (minutes * 60_000L).toLong()
-        val now = System.currentTimeMillis()
-        val remainingMs = targetTime - now
-        val triggered = now >= targetTime
-
-        DebugLog.d(
-            "TimeEval",
-            "minutes_from_now: value=${minutes}m, startedAt=${alarmStartedAt}, " +
-                    "target=$targetTime, now=$now, remaining=${remainingMs / 1000}s, triggered=$triggered"
-        )
-        return triggered
+    private fun toBool(v: Any): Boolean = when (v) {
+        is Boolean -> v
+        is Number -> v.toDouble() != 0.0
+        is String -> v.equals("true", ignoreCase = true) || v == "1"
+        else -> false
     }
 
-    private fun evaluateSecondsFromNow(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        val seconds = when (val v = condition.value) {
-            is Number -> v.toDouble()
-            is String -> v.toDoubleOrNull() ?: 0.0
-            else -> 0.0
-        }
-        val targetTime = alarmStartedAt + (seconds * 1_000L).toLong()
-        val now = System.currentTimeMillis()
-        val remainingMs = targetTime - now
-        val triggered = now >= targetTime
-
-        DebugLog.d(
-            "TimeEval",
-            "seconds_from_now: value=${seconds}s, startedAt=${alarmStartedAt}, " +
-                    "target=$targetTime, now=$now, remaining=${remainingMs}ms, triggered=$triggered"
-        )
-        return triggered
+    private fun toDouble(v: Any): Double? = when (v) {
+        is Number -> v.toDouble()
+        is String -> v.toDoubleOrNull()
+        else -> null
     }
-
-    private fun evaluateTimeIs(condition: LeafCondition): Boolean {
-        // value expected as "HH:mm" string
-        val target = condition.value?.toString() ?: return false
-        val parts = target.split(":")
-        if (parts.size != 2) return false
-        val cal = Calendar.getInstance()
-        val currentHour = cal.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = cal.get(Calendar.MINUTE)
-        val matched = currentHour == (parts[0].toIntOrNull() ?: -1) &&
-                currentMinute == (parts[1].toIntOrNull() ?: -1)
-        DebugLog.d("TimeEval", "time_is: target=$target, current=$currentHour:$currentMinute, matched=$matched")
-        return matched
-    }
-
-    private fun evaluateDayOfWeek(condition: LeafCondition): Boolean {
-        val target = condition.value?.toString()?.uppercase() ?: return false
-        val cal = Calendar.getInstance()
-        val dayNames = mapOf(
-            Calendar.MONDAY to "MONDAY", Calendar.TUESDAY to "TUESDAY",
-            Calendar.WEDNESDAY to "WEDNESDAY", Calendar.THURSDAY to "THURSDAY",
-            Calendar.FRIDAY to "FRIDAY", Calendar.SATURDAY to "SATURDAY",
-            Calendar.SUNDAY to "SUNDAY"
-        )
-        val today = dayNames[cal.get(Calendar.DAY_OF_WEEK)] ?: ""
-        val matched = today == target
-        DebugLog.d("TimeEval", "day_of_week: target=$target, today=$today, matched=$matched")
-        return matched
-    }
-}
-
-/** Evaluates location-based conditions. */
-class LocationEvaluator : ConditionEvaluator {
-    override val supportedTypes = setOf(
-        "arrive_at", "leave_location", "within_radius"
-    )
-
-    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        DebugLog.w("LocationEval", "${condition.type}: stub — always false (needs FusedLocation)")
-        return false
-    }
-}
-
-/** Evaluates recurring schedule conditions. */
-class RecurringEvaluator : ConditionEvaluator {
-    override val supportedTypes = setOf(
-        "every_x_hours", "every_x_days", "every_x_weeks",
-        "x_times_per_day", "x_times_per_week"
-    )
-
-    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        DebugLog.w("RecurringEval", "${condition.type}: stub — always false (needs interval tracking)")
-        return false
-    }
-}
-
-/** Evaluates user-defined custom conditions. */
-class CustomEvaluator : ConditionEvaluator {
-    override val supportedTypes = setOf<String>() // matches anything starting with "custom_"
-
-    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
-        DebugLog.w("CustomEval", "${condition.type}: stub — always false (needs rule engine)")
-        return false
-    }
-
-    fun canHandle(type: String): Boolean = type.startsWith("custom_")
 }
 
 /**
- * Composite evaluator that delegates to the appropriate strategy
- * and applies AND/OR logic for composite conditions.
+ * Composite evaluator that applies AND/OR logic for composite conditions
+ * and delegates leaf evaluation to [RuleEvaluator].
  */
 class ConditionTreeEvaluator(
-    private val evaluators: List<ConditionEvaluator> = listOf(
-        WeatherEvaluator(),
-        DeviceEvaluator(),
-        TimeEvaluator(),
-        LocationEvaluator(),
-        RecurringEvaluator(),
-    ),
-    private val customEvaluator: CustomEvaluator = CustomEvaluator()
+    private val ruleEvaluator: RuleEvaluator,
 ) {
-    suspend fun evaluate(condition: Condition, alarmStartedAt: Long): Boolean = when (condition) {
-        is LeafCondition -> evaluateLeaf(condition, alarmStartedAt)
-        is CompositeCondition -> evaluateComposite(condition, alarmStartedAt)
-    }
+    /** Secondary constructor for backward compatibility (service creates with Context). */
+    constructor(context: Context) : this(RuleEvaluator(DataSourceResolver(context)))
 
-    private suspend fun evaluateLeaf(leaf: LeafCondition, alarmStartedAt: Long): Boolean {
-        if (customEvaluator.canHandle(leaf.type)) {
-            return customEvaluator.evaluate(leaf, alarmStartedAt)
-        }
-        val evaluator = evaluators.firstOrNull { leaf.type in it.supportedTypes }
-        if (evaluator == null) {
-            DebugLog.e("TreeEval", "No evaluator found for type '${leaf.type}'")
-            return false
-        }
-        return evaluator.evaluate(leaf, alarmStartedAt)
+    suspend fun evaluate(condition: Condition, alarmStartedAt: Long): Boolean = when (condition) {
+        is LeafCondition -> ruleEvaluator.evaluate(condition, alarmStartedAt)
+        is CompositeCondition -> evaluateComposite(condition, alarmStartedAt)
     }
 
     private suspend fun evaluateComposite(composite: CompositeCondition, alarmStartedAt: Long): Boolean {

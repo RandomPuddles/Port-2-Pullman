@@ -5,12 +5,42 @@
       "icon": "cloud",
       "categoryKey": "weather",
       "conditions": [
-        { "type": "temperature_above", "label": "Temperature above", "hasNum": true, "unit": "°F" },
-        { "type": "temperature_below", "label": "Temperature below", "hasNum": true, "unit": "°F" },
-        { "type": "rain_expected",     "label": "Rain expected",     "hasNum": false },
-        { "type": "snow_expected",     "label": "Snow expected",     "hasNum": false },
-        { "type": "wind_speed_above",  "label": "Wind speed above",  "hasNum": true, "unit": "mph" },
-        { "type": "humidity_above",    "label": "Humidity above",    "hasNum": true, "unit": "%" }
+        {
+          "type": "temperature_above", "label": "Temperature above", "hasNum": true, "unit": "°F",
+          "rule": { "source": "weather.temperatureF", "op": ">", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["weather.temperatureF"]
+        },
+        {
+          "type": "temperature_below", "label": "Temperature below", "hasNum": true, "unit": "°F",
+          "rule": { "source": "weather.temperatureF", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["weather.temperatureF"]
+        },
+        {
+          "type": "rain_expected", "label": "Rain expected", "hasNum": false,
+          "rule": { "source": "weather.rainExpected", "op": "==", "valueRef": true },
+          "requiresPermissions": [],
+          "probeKeys": ["weather.rainExpected"]
+        },
+        {
+          "type": "snow_expected", "label": "Snow expected", "hasNum": false,
+          "rule": { "source": "weather.snowExpected", "op": "==", "valueRef": true },
+          "requiresPermissions": [],
+          "probeKeys": ["weather.snowExpected"]
+        },
+        {
+          "type": "wind_speed_above", "label": "Wind speed above", "hasNum": true, "unit": "mph",
+          "rule": { "source": "weather.windSpeedMph", "op": ">", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["weather.windSpeedMph"]
+        },
+        {
+          "type": "humidity_above", "label": "Humidity above", "hasNum": true, "unit": "%",
+          "rule": { "source": "weather.humidityPercent", "op": ">", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["weather.humidityPercent"]
+        }
       ]
     },
     {
@@ -18,11 +48,36 @@
       "icon": "smartphone",
       "categoryKey": "device",
       "conditions": [
-        { "type": "battery_below",       "label": "Battery below",       "hasNum": true, "unit": "%" },
-        { "type": "battery_above",       "label": "Battery above",       "hasNum": true, "unit": "%" },
-        { "type": "connected_wifi",      "label": "Connected to WiFi",   "hasNum": false },
-        { "type": "bluetooth_connected", "label": "Bluetooth connected", "hasNum": false },
-        { "type": "charging",            "label": "Charging",            "hasNum": false }
+        {
+          "type": "battery_below", "label": "Battery below", "hasNum": true, "unit": "%",
+          "rule": { "source": "device.batteryPercent", "op": "<", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["device.batteryPercent"]
+        },
+        {
+          "type": "battery_above", "label": "Battery above", "hasNum": true, "unit": "%",
+          "rule": { "source": "device.batteryPercent", "op": ">", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["device.batteryPercent"]
+        },
+        {
+          "type": "connected_wifi", "label": "Connected to WiFi", "hasNum": false,
+          "rule": { "source": "device.wifiConnected", "op": "==", "valueRef": true },
+          "requiresPermissions": ["android.permission.ACCESS_NETWORK_STATE"],
+          "probeKeys": ["device.wifiConnected", "device.wifiSsid"]
+        },
+        {
+          "type": "bluetooth_connected", "label": "Bluetooth connected", "hasNum": false,
+          "rule": { "source": "device.bluetoothConnected", "op": "==", "valueRef": true },
+          "requiresPermissions": ["android.permission.BLUETOOTH_CONNECT"],
+          "probeKeys": ["device.bluetoothConnected", "device.bluetoothPairedCount"]
+        },
+        {
+          "type": "charging", "label": "Charging", "hasNum": false,
+          "rule": { "source": "device.isCharging", "op": "==", "valueRef": true },
+          "requiresPermissions": [],
+          "probeKeys": ["device.isCharging", "device.chargingSource"]
+        }
       ]
     },
     {
@@ -30,11 +85,36 @@
       "icon": "schedule",
       "categoryKey": "time",
       "conditions": [
-        { "type": "time_is",          "label": "Time is",          "hasNum": false, "placeholder": "HH:MM" },
-        { "type": "day_of_week",      "label": "Day of week is",   "hasNum": false },
-        { "type": "date_is",          "label": "Date is",          "hasNum": false },
-        { "type": "minutes_from_now", "label": "Minutes from now", "hasNum": true, "unit": "min" },
-        { "type": "seconds_from_now", "label": "Seconds from now", "hasNum": true, "unit": "sec" }
+        {
+          "type": "time_is", "label": "Time is", "hasNum": false, "placeholder": "HH:MM",
+          "rule": { "source": "time.currentHHmm", "op": "==", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.currentHHmm"]
+        },
+        {
+          "type": "day_of_week", "label": "Day of week is", "hasNum": false,
+          "rule": { "source": "time.dayOfWeek", "op": "==", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.dayOfWeek"]
+        },
+        {
+          "type": "date_is", "label": "Date is", "hasNum": false,
+          "rule": { "source": "time.currentDate", "op": "==", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.currentDate"]
+        },
+        {
+          "type": "minutes_from_now", "label": "Minutes from now", "hasNum": true, "unit": "min",
+          "rule": { "source": "time.elapsedMinutes", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedMinutes"]
+        },
+        {
+          "type": "seconds_from_now", "label": "Seconds from now", "hasNum": true, "unit": "sec",
+          "rule": { "source": "time.elapsedSeconds", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedSeconds"]
+        }
       ]
     },
     {
@@ -42,9 +122,24 @@
       "icon": "location_on",
       "categoryKey": "location",
       "conditions": [
-        { "type": "arrive_at",      "label": "Arrive at location", "hasNum": false },
-        { "type": "leave_location", "label": "Leave location",     "hasNum": false },
-        { "type": "within_radius",  "label": "Within radius of",   "hasNum": true, "unit": "mi" }
+        {
+          "type": "arrive_at", "label": "Arrive at location", "hasNum": false,
+          "rule": { "source": "location.distanceToMi", "op": "<=", "valueRef": 0.1 },
+          "requiresPermissions": ["android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"],
+          "probeKeys": ["location.latitude", "location.longitude", "location.accuracy"]
+        },
+        {
+          "type": "leave_location", "label": "Leave location", "hasNum": false,
+          "rule": { "source": "location.distanceToMi", "op": ">", "valueRef": 0.1 },
+          "requiresPermissions": ["android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"],
+          "probeKeys": ["location.latitude", "location.longitude", "location.accuracy"]
+        },
+        {
+          "type": "within_radius", "label": "Within radius of", "hasNum": true, "unit": "mi",
+          "rule": { "source": "location.distanceToMi", "op": "<=", "valueRef": "user.value" },
+          "requiresPermissions": ["android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"],
+          "probeKeys": ["location.latitude", "location.longitude", "location.accuracy"]
+        }
       ]
     },
     {
@@ -52,11 +147,36 @@
       "icon": "event_repeat",
       "categoryKey": "recurring",
       "conditions": [
-        { "type": "every_x_hours",     "label": "Every X hours",     "hasNum": true, "unit": "hrs" },
-        { "type": "every_x_days",      "label": "Every X days",      "hasNum": true, "unit": "days" },
-        { "type": "every_x_weeks",     "label": "Every X weeks",     "hasNum": true, "unit": "weeks" },
-        { "type": "x_times_per_day",   "label": "X times per day",   "hasNum": true, "unit": "times" },
-        { "type": "x_times_per_week",  "label": "X times per week",  "hasNum": true, "unit": "times" }
+        {
+          "type": "every_x_hours", "label": "Every X hours", "hasNum": true, "unit": "hrs",
+          "rule": { "source": "time.elapsedHours", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedHours"]
+        },
+        {
+          "type": "every_x_days", "label": "Every X days", "hasNum": true, "unit": "days",
+          "rule": { "source": "time.elapsedDays", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedDays"]
+        },
+        {
+          "type": "every_x_weeks", "label": "Every X weeks", "hasNum": true, "unit": "weeks",
+          "rule": { "source": "time.elapsedWeeks", "op": ">=", "valueRef": "user.value" },
+          "requiresPermissions": [],
+          "probeKeys": ["time.epochMillis", "time.elapsedWeeks"]
+        },
+        {
+          "type": "x_times_per_day", "label": "X times per day", "hasNum": true, "unit": "times",
+          "rule": { "source": "recurring.timesTodayRemaining", "op": ">", "valueRef": 0 },
+          "requiresPermissions": [],
+          "probeKeys": ["recurring.timesToday"]
+        },
+        {
+          "type": "x_times_per_week", "label": "X times per week", "hasNum": true, "unit": "times",
+          "rule": { "source": "recurring.timesThisWeekRemaining", "op": ">", "valueRef": 0 },
+          "requiresPermissions": [],
+          "probeKeys": ["recurring.timesThisWeek"]
+        }
       ]
     }
   ]

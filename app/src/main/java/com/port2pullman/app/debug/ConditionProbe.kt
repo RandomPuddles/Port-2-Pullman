@@ -1,28 +1,19 @@
 package com.port2pullman.app.debug
 
-import android.Manifest
-import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.location.LocationManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.net.wifi.WifiManager
-import android.os.BatteryManager
 import androidx.core.content.ContextCompat
 import com.port2pullman.app.data.ConditionRegistry
+import com.port2pullman.app.engine.DataSourceResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 /**
- * Probes the device for every value used by condition evaluators and
- * reports the live reading or an error code.
+ * Probes the device for every value used by condition evaluators.
+ *
+ * Uses [DataSourceResolver] (the same resolver the evaluation engine uses)
+ * to read live values, and reads `probeKeys` + `requiresPermissions` from
+ * the [ConditionRegistry] JSON catalog.
  */
 object ConditionProbe {
 
@@ -37,256 +28,113 @@ object ConditionProbe {
         val detail: String = "",    // extra context
     )
 
-    private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
-
     /**
      * Run all probes and return one [ProbeResult] per condition type
      * in the catalog.
      */
     suspend fun probeAll(context: Context): List<ProbeResult> = withContext(Dispatchers.IO) {
+        val resolver = DataSourceResolver(context)
         val results = mutableListOf<ProbeResult>()
+
         for ((type, def) in ConditionRegistry.definitions) {
-            results += when (def.categoryKey) {
-                "weather"   -> probeWeather(def)
-                "device"    -> probeDevice(context, def)
-                "time"      -> probeTime(def)
-                "location"  -> probeLocation(context, def)
-                "recurring" -> probeRecurring(def)
-                else        -> ProbeResult(type, def.label, def.categoryKey,
-                    Status.UNAVAILABLE, "—", "Unknown category")
-            }
+            results += probeCondition(context, resolver, type, def)
         }
         results
     }
 
-    // ─── Weather ────────────────────────────────────────────────────────
-
-    private fun probeWeather(def: ConditionRegistry.ConditionDef): ProbeResult {
-        // Weather requires an external API key – mark as stub
-        return ProbeResult(
-            conditionType = def.type,
-            label = def.label,
-            category = "Weather",
-            status = Status.STUB,
-            value = "—",
-            detail = "Needs weather API key (OpenWeatherMap / Tomorrow.io)"
-        )
-    }
-
-    // ─── Device ─────────────────────────────────────────────────────────
-
-    private fun probeDevice(
+    private fun probeCondition(
         context: Context,
-        def: ConditionRegistry.ConditionDef,
-    ): ProbeResult = try {
-        when (def.type) {
-            "battery_below", "battery_above" -> probeBattery(context, def)
-            "connected_wifi" -> probeWifi(context, def)
-            "bluetooth_connected" -> probeBluetooth(context, def)
-            "charging" -> probeCharging(context, def)
-            else -> ProbeResult(def.type, def.label, "Device",
-                Status.UNAVAILABLE, "—", "Unrecognised device type")
-        }
-    } catch (e: Exception) {
-        ProbeResult(def.type, def.label, "Device", Status.ERROR,
-            "ERR", e.message ?: "unknown error")
-    }
-
-    private fun probeBattery(
-        context: Context,
+        resolver: DataSourceResolver,
+        type: String,
         def: ConditionRegistry.ConditionDef,
     ): ProbeResult {
-        val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
-            ?: return ProbeResult(def.type, def.label, "Device",
-                Status.UNAVAILABLE, "—", "BatteryManager unavailable")
-        val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        return ProbeResult(def.type, def.label, "Device",
-            Status.OK, "$level%", "Battery level")
+        val catLabel = ConditionRegistry.definitions.values
+            .firstOrNull { it.type == type }
+            ?.let { getCategoryLabel(it.categoryKey) } ?: def.categoryKey
+
+        // 1. Check permissions
+        val missingPerms = def.requiresPermissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missingPerms.isNotEmpty()) {
+            return ProbeResult(
+                conditionType = type,
+                label = def.label,
+                category = catLabel,
+                status = Status.NO_PERMISSION,
+                value = "—",
+                detail = "Missing: ${missingPerms.joinToString(", ") { it.substringAfterLast('.') }}"
+            )
+        }
+
+        // 2. No rule = stub
+        if (def.rule == null) {
+            return ProbeResult(type, def.label, catLabel,
+                Status.STUB, "—", "No rule defined")
+        }
+
+        // 3. Resolve all probeKeys and display their values
+        val probeKeys = def.probeKeys.ifEmpty { listOf(def.rule.source) }
+        val resolvedEntries = mutableListOf<Pair<String, Any?>>()
+        var anyNull = false
+
+        for (key in probeKeys) {
+            val value = try {
+                resolver.resolve(key, System.currentTimeMillis())
+            } catch (e: Exception) {
+                return ProbeResult(type, def.label, catLabel,
+                    Status.ERROR, "ERR", "${e::class.simpleName}: ${e.message}")
+            }
+            resolvedEntries += key to value
+            if (value == null) anyNull = true
+        }
+
+        // 4. Determine status
+        val status = when {
+            resolvedEntries.all { it.second == null } -> Status.STUB
+            anyNull -> Status.UNAVAILABLE
+            else -> Status.OK
+        }
+
+        // Build display value from the primary source
+        val primaryValue = resolvedEntries.firstOrNull()?.second
+        val displayValue = formatValue(primaryValue, def)
+
+        // Build detail from all resolved probe keys
+        val detail = resolvedEntries.joinToString(" | ") { (k, v) ->
+            val short = k.substringAfterLast('.')
+            "$short=${v ?: "null"}"
+        }
+
+        return ProbeResult(type, def.label, catLabel, status, displayValue, detail)
     }
 
-    @Suppress("MissingPermission")
-    private fun probeWifi(
-        context: Context,
-        def: ConditionRegistry.ConditionDef,
-    ): ProbeResult {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return ProbeResult(def.type, def.label, "Device",
-                Status.UNAVAILABLE, "—", "ConnectivityManager unavailable")
-        val net = cm.activeNetwork
-        val caps = if (net != null) cm.getNetworkCapabilities(net) else null
-        val hasWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-
-        // Try to get SSID if possible
-        var ssid = ""
-        if (hasWifi) {
-            try {
-                val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-                @Suppress("DEPRECATION")
-                ssid = wm?.connectionInfo?.ssid?.removePrefix("\"")?.removeSuffix("\"") ?: ""
-                if (ssid == "<unknown ssid>") ssid = "(hidden)"
-            } catch (_: Exception) { }
-        }
-
-        return ProbeResult(def.type, def.label, "Device",
-            Status.OK,
-            if (hasWifi) "Connected" else "Not connected",
-            if (ssid.isNotEmpty()) "SSID: $ssid" else "")
-    }
-
-    private fun probeBluetooth(
-        context: Context,
-        def: ConditionRegistry.ConditionDef,
-    ): ProbeResult {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            return ProbeResult(def.type, def.label, "Device",
-                Status.NO_PERMISSION, "—", "BLUETOOTH_CONNECT permission not granted")
-        }
-        val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            ?: return ProbeResult(def.type, def.label, "Device",
-                Status.UNAVAILABLE, "—", "BluetoothManager unavailable")
-        val adapter = bm.adapter
-            ?: return ProbeResult(def.type, def.label, "Device",
-                Status.UNAVAILABLE, "Off", "No Bluetooth adapter")
-        val enabled = adapter.isEnabled
-        val bonded = if (enabled) {
-            try { adapter.bondedDevices?.size ?: 0 } catch (_: Exception) { 0 }
-        } else 0
-        return ProbeResult(def.type, def.label, "Device",
-            Status.OK,
-            if (enabled) "Enabled" else "Disabled",
-            if (enabled) "$bonded paired device(s)" else "")
-    }
-
-    private fun probeCharging(
-        context: Context,
-        def: ConditionRegistry.ConditionDef,
-    ): ProbeResult {
-        val intent = context.registerReceiver(null,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL
-        val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
-        val source = when (plugged) {
-            BatteryManager.BATTERY_PLUGGED_AC -> "AC"
-            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
-            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
-            else -> "—"
-        }
-        return ProbeResult(def.type, def.label, "Device",
-            Status.OK,
-            if (charging) "Charging" else "Not charging",
-            if (charging) "Source: $source" else "")
-    }
-
-    // ─── Time / Date ────────────────────────────────────────────────────
-
-    private fun probeTime(def: ConditionRegistry.ConditionDef): ProbeResult {
-        val cal = Calendar.getInstance()
-        return when (def.type) {
-            "time_is" -> {
-                val now = timeFmt.format(Date())
-                ProbeResult(def.type, def.label, "Time / Date",
-                    Status.OK, now, "Current device time")
+    /**
+     * Format a resolved value for human-readable display.
+     */
+    private fun formatValue(value: Any?, def: ConditionRegistry.ConditionDef): String =
+        when {
+            value == null -> "—"
+            value is Boolean -> if (value) "Yes" else "No"
+            value is Number && def.unit.isNotEmpty() -> {
+                val n = value.toDouble()
+                if (n == n.toLong().toDouble()) "${n.toLong()}${def.unit}"
+                else "%.2f%s".format(n, def.unit)
             }
-            "day_of_week" -> {
-                val dayNames = mapOf(
-                    Calendar.MONDAY to "MONDAY", Calendar.TUESDAY to "TUESDAY",
-                    Calendar.WEDNESDAY to "WEDNESDAY", Calendar.THURSDAY to "THURSDAY",
-                    Calendar.FRIDAY to "FRIDAY", Calendar.SATURDAY to "SATURDAY",
-                    Calendar.SUNDAY to "SUNDAY"
-                )
-                val today = dayNames[cal.get(Calendar.DAY_OF_WEEK)] ?: "?"
-                ProbeResult(def.type, def.label, "Time / Date",
-                    Status.OK, today, "Calendar.DAY_OF_WEEK")
+            value is Number -> {
+                val n = value.toDouble()
+                if (n == n.toLong().toDouble()) "${n.toLong()}"
+                else "%.2f".format(n)
             }
-            "date_is" -> {
-                val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                ProbeResult(def.type, def.label, "Time / Date",
-                    Status.OK, fmt.format(Date()), "Current date")
-            }
-            "minutes_from_now" -> {
-                val now = System.currentTimeMillis()
-                ProbeResult(def.type, def.label, "Time / Date",
-                    Status.OK, "epoch=$now",
-                    "Reference: lastStartedAt (per alarm)")
-            }
-            "seconds_from_now" -> {
-                val now = System.currentTimeMillis()
-                ProbeResult(def.type, def.label, "Time / Date",
-                    Status.OK, "epoch=$now",
-                    "Reference: lastStartedAt (per alarm)")
-            }
-            else -> ProbeResult(def.type, def.label, "Time / Date",
-                Status.STUB, "—", "Not yet implemented")
-        }
-    }
-
-    // ─── Location ───────────────────────────────────────────────────────
-
-    private fun probeLocation(
-        context: Context,
-        def: ConditionRegistry.ConditionDef,
-    ): ProbeResult {
-        val fine = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!fine && !coarse) {
-            return ProbeResult(def.type, def.label, "Location",
-                Status.NO_PERMISSION, "—",
-                "ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION not granted")
+            else -> value.toString()
         }
 
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            ?: return ProbeResult(def.type, def.label, "Location",
-                Status.UNAVAILABLE, "—", "LocationManager unavailable")
-
-        val gpsEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val netEnabled = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-
-        if (!gpsEnabled && !netEnabled) {
-            return ProbeResult(def.type, def.label, "Location",
-                Status.UNAVAILABLE, "Off", "GPS and Network providers disabled")
-        }
-
-        // Try to read last known location
-        try {
-            @Suppress("MissingPermission")
-            val loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-
-            return if (loc != null) {
-                val age = (System.currentTimeMillis() - loc.time) / 1000
-                ProbeResult(def.type, def.label, "Location",
-                    Status.OK,
-                    "%.5f, %.5f".format(loc.latitude, loc.longitude),
-                    "Accuracy: ${loc.accuracy.toInt()}m, age: ${age}s, provider: ${loc.provider}")
-            } else {
-                ProbeResult(def.type, def.label, "Location",
-                    Status.UNAVAILABLE, "—", "No cached location available")
-            }
-        } catch (e: Exception) {
-            return ProbeResult(def.type, def.label, "Location",
-                Status.ERROR, "ERR", e.message ?: "unknown")
-        }
-    }
-
-    // ─── Recurring ──────────────────────────────────────────────────────
-
-    private fun probeRecurring(def: ConditionRegistry.ConditionDef): ProbeResult {
-        return ProbeResult(
-            conditionType = def.type,
-            label = def.label,
-            category = "Recurring Schedule",
-            status = Status.STUB,
-            value = "—",
-            detail = "Needs interval tracking / AlarmManager implementation"
-        )
+    private fun getCategoryLabel(key: String): String = when (key) {
+        "weather" -> "Weather"
+        "device" -> "Device"
+        "time" -> "Time / Date"
+        "location" -> "Location"
+        "recurring" -> "Recurring Schedule"
+        else -> key.replaceFirstChar { it.uppercase() }
     }
 }
