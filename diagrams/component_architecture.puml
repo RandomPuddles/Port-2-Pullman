@@ -1,7 +1,7 @@
 @startuml Component Architecture – Conditional Alarms
 
 title Conditional Alarms · Component Architecture
-caption Kotlin · Jetpack Compose · Coroutines / Flow · Room · Moshi · DataStore · Ktor Client
+caption Kotlin · Jetpack Compose · Coroutines / Flow · Room · Moshi · DataStore · Ktor Client · Gemini SDK
 
 skinparam componentStyle rectangle
 skinparam defaultFontName  Roboto
@@ -62,9 +62,9 @@ package "Condition Browser  (Compose)" as PKG_BROWSER {
 '  ROW 2 – AI · Storage · Engine
 ' ═══════════════════════════════════════════════
 
-package "AI Alarm Creator  (Compose · Ktor)" as PKG_AI {
+package "AI Alarm Creator  (Compose · Gemini SDK)" as PKG_AI {
   component [AIPromptDialog\n──────────────\nFree-text prompt input\nSubmit → generates draft] as AIDialog
-  component [AIViewModel\n──────────\nKtor POST → AI endpoint\nMoshi → Result<AlarmDraft>\nNavigates to Setup with draft] as AIVM
+  component [AIViewModel\n──────────\nGenerativeModel (Gemini 1.5 Pro)\nMoshi → Result<AlarmDraft>\nNavigates to Setup with draft] as AIVM
 }
 
 package "Alarm Storage  (Room · Moshi · DataStore)" as PKG_STORAGE {
@@ -185,8 +185,9 @@ note bottom of NotifCtrl
 end note
 
 note bottom of AIVM
-  Ktor POST /generate-alarm
-  { "prompt": "…" } → AlarmDraft
+  GenerativeModel (gemini-1.5-pro)
+  generateContent(prompt) → text
+  Moshi parses JSON → AlarmDraft
   Draft passed as Compose navigation
   arg (Moshi-serialized) to Setup.
   API key in secrets.properties.

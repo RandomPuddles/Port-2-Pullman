@@ -45,7 +45,7 @@ package "Condition Browser" as PKG_BROWSER {
 ' ═══════════════════════════════════════════════
 
 package "AI Alarm Creator" as PKG_AI {
-  component [AI Prompt\n─────────────\nFree-text prompt\n→ alarm draft for review] as AIPrompt
+  component [AI Prompt  (Gemini)\n─────────────\nFree-text prompt\n→ alarm draft for review] as AIPrompt
 }
 
 package "Alarm Storage" as PKG_STORAGE {
