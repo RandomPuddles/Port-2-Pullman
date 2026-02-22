@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:name=".App"
@@ -39,6 +40,14 @@
             android:name=".engine.AlarmEvaluatorService"
             android:exported="false"
             android:foregroundServiceType="location|specialUse" />
+
+        <receiver
+            android:name=".engine.AlarmDismissReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.port2pullman.app.ACTION_DISMISS_ALARM" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
