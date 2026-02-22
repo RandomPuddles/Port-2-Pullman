@@ -1,16 +1,68 @@
 package com.example.eventtriggeralarm.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.eventtriggeralarm.data.Alarm
 import com.example.eventtriggeralarm.data.ConditionItem
 import com.example.eventtriggeralarm.data.RefreshFreq
+import com.example.eventtriggeralarm.domain.condition.TreeBuilder
+import com.example.eventtriggeralarm.evaluator.StubGeminiEvaluator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class AppViewModel : ViewModel() {
+class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(AppState())
+    private val geminiEvaluator = StubGeminiEvaluator()
+
+    init {
+        viewModelScope.launch { runForegroundEvaluation() }
+    }
+
+    private suspend fun runForegroundEvaluation() {
+        while (true) {
+            delay(EVALUATION_INTERVAL_MS)
+            evaluateEnabledAlarms()
+        }
+    }
+
+    private suspend fun evaluateEnabledAlarms() {
+        val alarms = _state.value.alarms
+        if (alarms.isEmpty()) return
+
+        val context = getApplication<Application>().applicationContext
+        for (alarm in alarms) {
+            if (!alarm.enabled) continue
+            if (alarm.conditions.isEmpty()) continue
+
+            val alreadyShowing = _state.value.showTriggeredDialog &&
+                _state.value.triggeredAlarm?.title == alarm.title
+
+            if (alreadyShowing) continue
+
+            val satisfied = withContext(Dispatchers.IO) {
+                runCatching {
+                    val tree = TreeBuilder.buildTree(
+                        items = alarm.conditions,
+                        operators = alarm.operators,
+                        context = context,
+                        geminiEvaluator = geminiEvaluator
+                    )
+                    tree.getCondition()
+                }.getOrElse { false }
+            }
+
+            if (satisfied) {
+                showTriggeredDemo(alarm)
+            }
+        }
+    }
     val state: StateFlow<AppState> = _state.asStateFlow()
 
     // ─── Home ─────────────────────────────────────────────────
@@ -461,5 +513,9 @@ class AppViewModel : ViewModel() {
         _state.update {
             it.copy(showTriggeredDialog = false, triggeredAlarm = null)
         }
+    }
+
+    companion object {
+        private const val EVALUATION_INTERVAL_MS = 30_000L // 30 seconds
     }
 }
