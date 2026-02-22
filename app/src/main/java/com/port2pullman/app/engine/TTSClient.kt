@@ -89,9 +89,13 @@ class TTSClient(private val context: Context) {
 
     /** Stop any currently playing audio and release resources. */
     fun stop() {
-        mediaPlayer?.let {
-            if (it.isPlaying) it.stop()
-            it.release()
+        try {
+            mediaPlayer?.let {
+                if (it.isPlaying) it.stop()
+                it.release()
+            }
+        } catch (_: IllegalStateException) {
+            // Already released — ignore
         }
         mediaPlayer = null
     }
@@ -178,10 +182,13 @@ class TTSClient(private val context: Context) {
                 setOnCompletionListener {
                     DebugLog.d(TAG, "TTS playback completed")
                     it.release()
+                    mediaPlayer = null  // Clear ref so stop() won't touch a released player
                     file.delete() // Clean up temp file
                 }
-                setOnErrorListener { _, what, extra ->
+                setOnErrorListener { mp, what, extra ->
                     DebugLog.e(TAG, "MediaPlayer error: what=$what extra=$extra")
+                    mp.release()
+                    mediaPlayer = null
                     file.delete()
                     true
                 }
