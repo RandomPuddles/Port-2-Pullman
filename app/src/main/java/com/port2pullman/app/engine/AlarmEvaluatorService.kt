@@ -96,7 +96,7 @@ class AlarmEvaluatorService : Service() {
         DebugLog.d("EvalService", "evaluateAll: ${enabled.size}/${alarms.size} alarms enabled")
 
         for (alarm in enabled) {
-            val triggered = evaluator.evaluate(alarm.rootCondition, alarm.createdAt)
+            val triggered = evaluator.evaluate(alarm.rootCondition, alarm.lastStartedAt)
             DebugLog.d("EvalService", "Alarm '${alarm.title}' (id=${alarm.id}): triggered=$triggered")
             if (triggered) {
                 DebugLog.i("EvalService", "TRIGGERED: '${alarm.title}'")

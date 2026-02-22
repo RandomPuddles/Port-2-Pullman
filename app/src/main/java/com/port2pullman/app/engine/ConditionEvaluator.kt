@@ -13,9 +13,9 @@ interface ConditionEvaluator {
 
     /**
      * Evaluate a single [LeafCondition] and return true if it is satisfied.
-     * [alarmCreatedAt] is the epoch-millis when the alarm was created/saved.
+     * [alarmStartedAt] is the epoch-millis when the alarm was last started/enabled.
      */
-    suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean
+    suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean
 }
 
 /** Evaluates weather-related conditions (stub – needs real API integration). */
@@ -26,7 +26,7 @@ class WeatherEvaluator : ConditionEvaluator {
         "wind_speed_above", "humidity_above"
     )
 
-    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         DebugLog.w("WeatherEval", "${condition.type}: stub — always false (needs API key)")
         return false
     }
@@ -39,7 +39,7 @@ class DeviceEvaluator : ConditionEvaluator {
         "connected_wifi", "bluetooth_connected", "charging"
     )
 
-    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         DebugLog.w("DeviceEval", "${condition.type}: stub — always false (needs system APIs)")
         return false
     }
@@ -51,9 +51,9 @@ class TimeEvaluator : ConditionEvaluator {
         "time_is", "day_of_week", "date_is", "minutes_from_now"
     )
 
-    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         return when (condition.type) {
-            "minutes_from_now" -> evaluateMinutesFromNow(condition, alarmCreatedAt)
+            "minutes_from_now" -> evaluateMinutesFromNow(condition, alarmStartedAt)
             "time_is" -> evaluateTimeIs(condition)
             "day_of_week" -> evaluateDayOfWeek(condition)
             else -> {
@@ -63,20 +63,20 @@ class TimeEvaluator : ConditionEvaluator {
         }
     }
 
-    private fun evaluateMinutesFromNow(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    private fun evaluateMinutesFromNow(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         val minutes = when (val v = condition.value) {
             is Number -> v.toDouble()
             is String -> v.toDoubleOrNull() ?: 0.0
             else -> 0.0
         }
-        val targetTime = alarmCreatedAt + (minutes * 60_000L).toLong()
+        val targetTime = alarmStartedAt + (minutes * 60_000L).toLong()
         val now = System.currentTimeMillis()
         val remainingMs = targetTime - now
         val triggered = now >= targetTime
 
         DebugLog.d(
             "TimeEval",
-            "minutes_from_now: value=${minutes}m, created=${alarmCreatedAt}, " +
+            "minutes_from_now: value=${minutes}m, startedAt=${alarmStartedAt}, " +
                     "target=$targetTime, now=$now, remaining=${remainingMs / 1000}s, triggered=$triggered"
         )
         return triggered
@@ -118,7 +118,7 @@ class LocationEvaluator : ConditionEvaluator {
         "arrive_at", "leave_location", "within_radius"
     )
 
-    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         DebugLog.w("LocationEval", "${condition.type}: stub — always false (needs FusedLocation)")
         return false
     }
@@ -131,7 +131,7 @@ class RecurringEvaluator : ConditionEvaluator {
         "x_times_per_day", "x_times_per_week"
     )
 
-    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         DebugLog.w("RecurringEval", "${condition.type}: stub — always false (needs interval tracking)")
         return false
     }
@@ -141,7 +141,7 @@ class RecurringEvaluator : ConditionEvaluator {
 class CustomEvaluator : ConditionEvaluator {
     override val supportedTypes = setOf<String>() // matches anything starting with "custom_"
 
-    override suspend fun evaluate(condition: LeafCondition, alarmCreatedAt: Long): Boolean {
+    override suspend fun evaluate(condition: LeafCondition, alarmStartedAt: Long): Boolean {
         DebugLog.w("CustomEval", "${condition.type}: stub — always false (needs rule engine)")
         return false
     }
@@ -163,28 +163,28 @@ class ConditionTreeEvaluator(
     ),
     private val customEvaluator: CustomEvaluator = CustomEvaluator()
 ) {
-    suspend fun evaluate(condition: Condition, alarmCreatedAt: Long): Boolean = when (condition) {
-        is LeafCondition -> evaluateLeaf(condition, alarmCreatedAt)
-        is CompositeCondition -> evaluateComposite(condition, alarmCreatedAt)
+    suspend fun evaluate(condition: Condition, alarmStartedAt: Long): Boolean = when (condition) {
+        is LeafCondition -> evaluateLeaf(condition, alarmStartedAt)
+        is CompositeCondition -> evaluateComposite(condition, alarmStartedAt)
     }
 
-    private suspend fun evaluateLeaf(leaf: LeafCondition, alarmCreatedAt: Long): Boolean {
+    private suspend fun evaluateLeaf(leaf: LeafCondition, alarmStartedAt: Long): Boolean {
         if (customEvaluator.canHandle(leaf.type)) {
-            return customEvaluator.evaluate(leaf, alarmCreatedAt)
+            return customEvaluator.evaluate(leaf, alarmStartedAt)
         }
         val evaluator = evaluators.firstOrNull { leaf.type in it.supportedTypes }
         if (evaluator == null) {
             DebugLog.e("TreeEval", "No evaluator found for type '${leaf.type}'")
             return false
         }
-        return evaluator.evaluate(leaf, alarmCreatedAt)
+        return evaluator.evaluate(leaf, alarmStartedAt)
     }
 
-    private suspend fun evaluateComposite(composite: CompositeCondition, alarmCreatedAt: Long): Boolean {
+    private suspend fun evaluateComposite(composite: CompositeCondition, alarmStartedAt: Long): Boolean {
         if (composite.children.isEmpty()) return false
         return when (composite.operator) {
-            Operator.AND -> composite.children.all { evaluate(it, alarmCreatedAt) }
-            Operator.OR -> composite.children.any { evaluate(it, alarmCreatedAt) }
+            Operator.AND -> composite.children.all { evaluate(it, alarmStartedAt) }
+            Operator.OR -> composite.children.any { evaluate(it, alarmStartedAt) }
         }
     }
 }
