@@ -17,10 +17,17 @@ import com.port2pullman.app.ui.theme.Port2PullmanTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val notifPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        DebugLog.i("MainActivity", "POST_NOTIFICATIONS permission granted=$granted")
+    /**
+     * Launcher for requesting multiple runtime permissions at once.
+     * After the user responds, we start the evaluator service regardless
+     * (the service and probes gracefully handle missing permissions).
+     */
+    private val permissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        results.forEach { (perm, granted) ->
+            DebugLog.i("MainActivity", "$perm granted=$granted")
+        }
         startEvaluatorService()
     }
 
@@ -28,7 +35,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        requestNotificationPermissionAndStartService()
+        requestPermissionsAndStartService()
 
         setContent {
             Port2PullmanTheme {
@@ -37,21 +44,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestNotificationPermissionAndStartService() {
+    /**
+     * Collect every dangerous permission the app needs, filter to only
+     * those not yet granted, and request them in a single system dialog.
+     */
+    private fun requestPermissionsAndStartService() {
+        val needed = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.BLUETOOTH_CONNECT,
+        )
+        // POST_NOTIFICATIONS is only a runtime permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    DebugLog.d("MainActivity", "Notification permission already granted")
-                    startEvaluatorService()
-                }
-                else -> {
-                    DebugLog.d("MainActivity", "Requesting POST_NOTIFICATIONS permission")
-                    notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }
+            needed += Manifest.permission.POST_NOTIFICATIONS
+        }
+
+        val missing = needed.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing.isNotEmpty()) {
+            DebugLog.d("MainActivity", "Requesting permissions: $missing")
+            permissionsLauncher.launch(missing.toTypedArray())
         } else {
+            DebugLog.d("MainActivity", "All permissions already granted")
             startEvaluatorService()
         }
     }
