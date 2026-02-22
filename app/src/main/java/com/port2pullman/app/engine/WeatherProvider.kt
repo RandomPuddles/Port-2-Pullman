@@ -2,6 +2,7 @@ package com.port2pullman.app.engine
 
 import android.content.Context
 import com.port2pullman.app.debug.DebugLog
+import com.port2pullman.app.debug.DebugSettings
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
 import io.ktor.client.request.*
@@ -23,7 +24,6 @@ import org.json.JSONObject
 object WeatherProvider {
 
     private const val TAG = "Weather"
-    private const val CACHE_TTL_MS = 10 * 60_000L          // 10 minutes
     private const val BASE_URL = "https://api.open-meteo.com/v1/forecast"
     private const val FALLBACK_LAT = 46.7298               // Pullman, WA
     private const val FALLBACK_LON = -117.1817
@@ -45,7 +45,7 @@ object WeatherProvider {
     private val fetchMutex = Mutex()
 
     /** True when cache is fresh enough. */
-    val isFresh: Boolean get() = System.currentTimeMillis() - lastFetchedAt < CACHE_TTL_MS
+    val isFresh: Boolean get() = System.currentTimeMillis() - lastFetchedAt < DebugSettings.weatherCacheTtlMs
 
     /**
      * Ensure weather data is available.  If the cache is stale a background

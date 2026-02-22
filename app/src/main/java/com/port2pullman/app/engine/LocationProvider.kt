@@ -9,6 +9,7 @@ import android.location.LocationManager
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.port2pullman.app.debug.DebugLog
+import com.port2pullman.app.debug.DebugSettings
 
 /**
  * Singleton that actively requests location updates so the app always
@@ -23,11 +24,7 @@ object LocationProvider {
 
     private const val TAG = "LocationProvider"
 
-    /** Minimum interval between updates (milliseconds). */
-    private const val MIN_INTERVAL_MS = 30_000L   // 30 s
-
-    /** Minimum distance between updates (metres). */
-    private const val MIN_DISTANCE_M = 10f         // 10 m
+    // Intervals are read from DebugSettings at start() time
 
     /** Fallback coordinates — Pullman, WA */
     private const val FALLBACK_LAT = 46.7298
@@ -39,6 +36,7 @@ object LocationProvider {
         private set
 
     private var started = false
+    private var lastContext: Context? = null
 
     // One listener per provider so we can remove them cleanly.
     private val listeners = mutableListOf<Pair<String, LocationListener>>()
@@ -64,6 +62,9 @@ object LocationProvider {
 
         // Seed with best cached fix immediately
         seedFromCached(lm)
+
+        val minTime = DebugSettings.locationMinTimeMs
+        val minDist = DebugSettings.locationMinDistanceM
 
         val providers = listOf(
             LocationManager.FUSED_PROVIDER,
@@ -96,20 +97,24 @@ object LocationProvider {
 
                 lm.requestLocationUpdates(
                     provider,
-                    MIN_INTERVAL_MS,
-                    MIN_DISTANCE_M,
+                    minTime,
+                    minDist,
                     listener,
                     Looper.getMainLooper()
                 )
                 listeners.add(provider to listener)
-                DebugLog.i(TAG, "Registered updates on $provider (${MIN_INTERVAL_MS}ms / ${MIN_DISTANCE_M}m)")
+                DebugLog.i(TAG, "Registered updates on $provider (${minTime}ms / ${minDist}m)")
             } catch (e: Exception) {
                 DebugLog.w(TAG, "Could not register $provider: ${e.message}")
             }
         }
 
         started = true
+        lastContext = context.applicationContext
         DebugLog.i(TAG, "Active location updates started (${listeners.size} providers)")
+
+        // Register restart callback so DebugSettings tab can restart us
+        DebugSettings.restartLocationCallback = { restart() }
     }
 
     /**
@@ -117,6 +122,7 @@ object LocationProvider {
      */
     fun stop(context: Context) {
         if (!started) return
+        DebugSettings.restartLocationCallback = null
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         if (lm != null) {
             for ((provider, listener) in listeners) {
@@ -131,6 +137,16 @@ object LocationProvider {
         listeners.clear()
         started = false
         DebugLog.i(TAG, "Active location updates stopped")
+    }
+
+    /**
+     * Restart with current [DebugSettings] intervals.
+     * Called via [DebugSettings.restartLocationCallback].
+     */
+    fun restart() {
+        val ctx = lastContext ?: return
+        stop(ctx)
+        start(ctx)
     }
 
     // ── Public helpers ───────────────────────────────────────────────

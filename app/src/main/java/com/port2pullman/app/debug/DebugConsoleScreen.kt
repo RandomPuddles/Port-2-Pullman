@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
@@ -23,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,7 +48,7 @@ fun DebugConsoleScreen(
     val listState = rememberLazyListState()
     val clipboardManager = LocalClipboardManager.current
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Logs", "API Debug")
+    val tabs = listOf("Logs", "API Debug", "Settings")
 
     // Auto-scroll log to bottom on new entries
     LaunchedEffect(entries.size) {
@@ -142,6 +144,7 @@ fun DebugConsoleScreen(
         when (selectedTab) {
             0 -> LogsTab(entries, listState, padding)
             1 -> ApiDebugTab(padding)
+            2 -> SettingsTab(padding)
         }
     }
 }
@@ -213,12 +216,12 @@ private fun ApiDebugTab(padding: PaddingValues) {
         }
     }
 
-    // Auto-refresh every 5 seconds while this tab is visible.
+    // Auto-refresh at the interval set in DebugSettings while this tab is visible.
     // Runs in LaunchedEffect's own scope (auto-cancelled on leave).
     LaunchedEffect(Unit) {
         doRefreshSuspend(force = true)
         while (true) {
-            kotlinx.coroutines.delay(5_000L)
+            kotlinx.coroutines.delay(DebugSettings.apiDebugRefreshMs)
             doRefreshSuspend(force = false)
         }
     }
@@ -469,5 +472,218 @@ private fun LogEntry(entry: DebugLog.Entry) {
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
         )
+    }
+}
+
+// ─── Settings Tab ───────────────────────────────────────────────────────
+
+@Composable
+private fun SettingsTab(padding: PaddingValues) {
+    var evalInterval by remember { mutableStateOf(DebugSettings.evalIntervalMs.toString()) }
+    var locMinTime by remember { mutableStateOf(DebugSettings.locationMinTimeMs.toString()) }
+    var locMinDist by remember { mutableStateOf(DebugSettings.locationMinDistanceM.toString()) }
+    var weatherTtl by remember { mutableStateOf(DebugSettings.weatherCacheTtlMs.toString()) }
+    var apiRefresh by remember { mutableStateOf(DebugSettings.apiDebugRefreshMs.toString()) }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(horizontal = 12.dp),
+        contentPadding = PaddingValues(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        // ── Alarm Evaluation ──
+        item {
+            SettingSectionHeader("Alarm Evaluation")
+        }
+        item {
+            IntervalRow(
+                label = "Eval interval",
+                unit = "ms",
+                value = evalInterval,
+                onValueChange = { evalInterval = it },
+                onApply = {
+                    evalInterval.toLongOrNull()?.let { v ->
+                        DebugSettings.evalIntervalMs = v.coerceAtLeast(1_000L)
+                        evalInterval = DebugSettings.evalIntervalMs.toString()
+                    }
+                },
+                hint = "default 15000",
+            )
+        }
+
+        // ── GPS / Location ──
+        item {
+            SettingSectionHeader("GPS / Location")
+        }
+        item {
+            IntervalRow(
+                label = "Min time",
+                unit = "ms",
+                value = locMinTime,
+                onValueChange = { locMinTime = it },
+                onApply = {
+                    locMinTime.toLongOrNull()?.let { v ->
+                        DebugSettings.locationMinTimeMs = v.coerceAtLeast(1_000L)
+                        locMinTime = DebugSettings.locationMinTimeMs.toString()
+                        DebugSettings.restartLocationCallback?.invoke()
+                    }
+                },
+                hint = "default 30000",
+            )
+        }
+        item {
+            IntervalRow(
+                label = "Min distance",
+                unit = "m",
+                value = locMinDist,
+                onValueChange = { locMinDist = it },
+                onApply = {
+                    locMinDist.toFloatOrNull()?.let { v ->
+                        DebugSettings.locationMinDistanceM = v.coerceAtLeast(0f)
+                        locMinDist = DebugSettings.locationMinDistanceM.toString()
+                        DebugSettings.restartLocationCallback?.invoke()
+                    }
+                },
+                hint = "default 10.0",
+            )
+        }
+
+        // ── Weather ──
+        item {
+            SettingSectionHeader("Weather Cache")
+        }
+        item {
+            IntervalRow(
+                label = "Cache TTL",
+                unit = "ms",
+                value = weatherTtl,
+                onValueChange = { weatherTtl = it },
+                onApply = {
+                    weatherTtl.toLongOrNull()?.let { v ->
+                        DebugSettings.weatherCacheTtlMs = v.coerceAtLeast(10_000L)
+                        weatherTtl = DebugSettings.weatherCacheTtlMs.toString()
+                    }
+                },
+                hint = "default 600000",
+            )
+        }
+
+        // ── Debug API Tab ──
+        item {
+            SettingSectionHeader("API Debug Tab")
+        }
+        item {
+            IntervalRow(
+                label = "Auto-refresh",
+                unit = "ms",
+                value = apiRefresh,
+                onValueChange = { apiRefresh = it },
+                onApply = {
+                    apiRefresh.toLongOrNull()?.let { v ->
+                        DebugSettings.apiDebugRefreshMs = v.coerceAtLeast(1_000L)
+                        apiRefresh = DebugSettings.apiDebugRefreshMs.toString()
+                    }
+                },
+                hint = "default 5000",
+            )
+        }
+
+        // ── Reset all ──
+        item { Spacer(Modifier.height(16.dp)) }
+        item {
+            OutlinedButton(
+                onClick = {
+                    DebugSettings.evalIntervalMs = 15_000L
+                    DebugSettings.locationMinTimeMs = 30_000L
+                    DebugSettings.locationMinDistanceM = 10f
+                    DebugSettings.weatherCacheTtlMs = 10 * 60_000L
+                    DebugSettings.apiDebugRefreshMs = 5_000L
+                    evalInterval = "15000"
+                    locMinTime = "30000"
+                    locMinDist = "10.0"
+                    weatherTtl = "600000"
+                    apiRefresh = "5000"
+                    DebugSettings.restartLocationCallback?.invoke()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = WarnColor),
+            ) {
+                Text("Reset All to Defaults", fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSectionHeader(title: String) {
+    Spacer(Modifier.height(8.dp))
+    Text(
+        title.uppercase(),
+        color = TagColor,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF313244), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    )
+}
+
+@Composable
+private fun IntervalRow(
+    label: String,
+    unit: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onApply: () -> Unit,
+    hint: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = TerminalText,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .width(130.dp)
+                .height(48.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = InfoColor,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+            ),
+            placeholder = {
+                Text(hint, color = TimestampColor, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = TagColor,
+                unfocusedBorderColor = TimestampColor,
+                cursorColor = TagColor,
+            ),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(unit, color = TimestampColor, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        Spacer(Modifier.width(4.dp))
+        TextButton(
+            onClick = onApply,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+        ) {
+            Text("Apply", color = DebugColor, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        }
     }
 }

@@ -10,6 +10,7 @@ import com.port2pullman.app.data.AlarmRepositoryImpl
 import com.port2pullman.app.data.TriggerHistoryDao
 import com.port2pullman.app.data.TriggerHistoryEntity
 import com.port2pullman.app.debug.DebugLog
+import com.port2pullman.app.debug.DebugSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 
@@ -24,7 +25,6 @@ class AlarmEvaluatorService : Service() {
         const val CHANNEL_ID = "alarm_service"
         const val CHANNEL_NAME = "Alarm Monitor"
         const val NOTIFICATION_ID = 1001
-        private const val EVAL_INTERVAL_MS = 15_000L // 15 seconds for responsive triggering
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -85,14 +85,14 @@ class AlarmEvaluatorService : Service() {
 
     private fun startEvaluationLoop() {
         scope.launch {
-            DebugLog.i("EvalService", "Evaluation loop started (interval=${EVAL_INTERVAL_MS}ms)")
+            DebugLog.i("EvalService", "Evaluation loop started (interval=${DebugSettings.evalIntervalMs}ms)")
             while (isActive) {
                 try {
                     evaluateAll()
                 } catch (e: Exception) {
                     DebugLog.e("EvalService", "Error during evaluation", e)
                 }
-                delay(EVAL_INTERVAL_MS)
+                delay(DebugSettings.evalIntervalMs)
             }
         }
     }
