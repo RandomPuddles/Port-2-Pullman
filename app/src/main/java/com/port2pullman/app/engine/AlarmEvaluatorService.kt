@@ -43,6 +43,7 @@ class AlarmEvaluatorService : Service() {
         notificationController = NotificationController(this)
         evaluator = ConditionTreeEvaluator(this, triggerHistoryDao)
         ttsClient = TTSClient(this)
+        AlarmDismissReceiver.ttsClient = ttsClient
         LocationProvider.start(this)
         createChannel()
         startForeground(NOTIFICATION_ID, buildForegroundNotification())
@@ -54,6 +55,7 @@ class AlarmEvaluatorService : Service() {
     override fun onDestroy() {
         DebugLog.i("EvalService", "Service onDestroy")
         ttsClient.stop()
+        AlarmDismissReceiver.ttsClient = null
         LocationProvider.stop(this)
         scope.cancel()
         super.onDestroy()
@@ -123,12 +125,22 @@ class AlarmEvaluatorService : Service() {
 
                 // Speak alarm title aloud via ElevenLabs TTS
                 if (alarm.readout) {
-                    DebugLog.i("EvalService", "TTS readout for '${alarm.title}'")
-                    scope.launch {
-                        try {
-                            ttsClient.speak("Alarm: ${alarm.title}")
-                        } catch (e: Exception) {
-                            DebugLog.e("EvalService", "TTS readout failed: ${e.message}")
+                    if (alarm.ring) {
+                        // Ringing alarm: defer TTS until user dismisses
+                        DebugLog.i("EvalService", "TTS readout deferred until dismiss for '${alarm.title}'")
+                        AlarmDismissReceiver.registerPendingTts(
+                            alarm.id.toInt(),
+                            "Alarm: ${alarm.title}"
+                        )
+                    } else {
+                        // Non-ringing: play immediately (no overlap)
+                        DebugLog.i("EvalService", "TTS readout for '${alarm.title}'")
+                        scope.launch {
+                            try {
+                                ttsClient.speak("Alarm: ${alarm.title}")
+                            } catch (e: Exception) {
+                                DebugLog.e("EvalService", "TTS readout failed: ${e.message}")
+                            }
                         }
                     }
                 }
