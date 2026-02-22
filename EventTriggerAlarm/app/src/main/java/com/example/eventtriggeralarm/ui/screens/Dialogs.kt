@@ -215,8 +215,9 @@ fun CustomConditionDialog(state: AppState, viewModel: AppViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("seconds", "minutes", "hours", "days").forEach { unit ->
                             val selected = state.customCondFreqUnit == unit
+                            val label = if (unit == "hours") "hr" else unit.take(3)
                             Text(
-                                unit.take(3),
+                                label,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
@@ -303,7 +304,7 @@ fun NumValDialog(state: AppState, viewModel: AppViewModel) {
 }
 
 @Composable
-fun ConfirmDeleteDialog(state: AppState, viewModel: AppViewModel) {
+fun ConfirmDeleteDialog(state: AppState, viewModel: AppViewModel, onDeleted: (() -> Unit)? = null) {
     if (!state.showConfirmDelete) return
     Dialog(
         onDismissRequest = { viewModel.cancelConfirmDelete() },
@@ -340,7 +341,10 @@ fun ConfirmDeleteDialog(state: AppState, viewModel: AppViewModel) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
-                        onClick = { viewModel.executePendingDelete() },
+                        onClick = {
+                            viewModel.executePendingDelete()
+                            onDeleted?.invoke()
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text("Delete")

@@ -73,17 +73,20 @@ fun SetupScreen(
                     Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
                 }
             }
+            val canSave = state.setupTitle.isNotBlank() && state.setupConditions.isNotEmpty()
             Text(
                 "Save",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                 modifier = Modifier
                     .padding(8.dp, 16.dp)
-                    .clickable {
-                        viewModel.setSetupTitle(state.setupTitle)
-                        viewModel.saveAlarm()
-                        onSave()
-                    }
+                    .then(
+                        if (canSave) Modifier.clickable {
+                            viewModel.setSetupTitle(state.setupTitle)
+                            viewModel.saveAlarm()
+                            onSave()
+                        } else Modifier
+                    )
             )
         }
 

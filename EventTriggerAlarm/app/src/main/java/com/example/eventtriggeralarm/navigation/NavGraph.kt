@@ -74,7 +74,9 @@ fun AppNavGraph(
     AiPromptDialog(state, viewModel) { /* stays on setup */ }
     CustomConditionDialog(state, viewModel)
     NumValDialog(state, viewModel)
-    ConfirmDeleteDialog(state, viewModel)
+    ConfirmDeleteDialog(state, viewModel) {
+        navController.popBackStack(Routes.Home, false)
+    }
     ManageCustomDialog(state, viewModel)
     TriggeredDialog(state, viewModel)
 }
