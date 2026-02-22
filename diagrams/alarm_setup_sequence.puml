@@ -1,0 +1,90 @@
+@startuml Alarm Setup – Sequence Diagram
+title Alarm Setup · Key Sequences
+
+skinparam defaultFontName Roboto
+skinparam defaultFontSize 12
+skinparam backgroundColor #FAFCFA
+skinparam sequenceArrowColor #37474F
+skinparam sequenceLifeLineBorderColor #2E7D32
+
+actor User
+participant "SetupScreen" as UI
+participant "SetupViewModel" as VM
+participant "IAlarmRepository" as Repo
+
+== Create New Alarm ==
+
+User -> UI : tap FAB (+) from Home
+UI -> VM : loadDraft(empty AlarmDraft)
+
+User -> UI : enter title
+UI -> VM : updateTitle("Morning Rain")
+
+User -> UI : toggle Readout ON
+UI -> VM : setReadout(true)
+
+User -> UI : toggle Ring ON
+UI -> VM : setRing(true)
+
+User -> UI : tap "+ Add Condition"
+UI -> UI : navigate to CategoryScreen
+note right : returns Condition via\nCompose navigation result
+
+UI -> VM : addCondition(selectedCondition)
+
+== Edit Existing Alarm ==
+
+UI -> VM : loadAlarm(alarmId)
+activate VM
+VM -> Repo : getById(alarmId)
+Repo --> VM : Flow<Alarm?>
+VM --> UI : StateFlow<AlarmDraft>
+deactivate VM
+
+== Modify Condition ==
+
+User -> UI : tap bool-op chip (AND/OR)
+UI -> VM : setOperator(index, OR)
+
+User -> UI : tap numerical value badge
+UI -> VM : setNumericalValue(index, 70)
+
+== Drag to Reorder Conditions ==
+
+User -> UI : drag condition block
+UI -> VM : reorderConditions(from=2, to=0)
+
+== Remove Condition ==
+
+User -> UI : tap × on condition block
+UI -> VM : removeCondition(index)
+
+== Save Alarm ==
+
+User -> UI : tap Save
+UI -> VM : save()
+activate VM
+VM -> VM : build Alarm from draft
+VM -> Repo : upsert(alarm)
+Repo --> VM : alarmId: Long
+VM --> UI : navigate back to Home
+deactivate VM
+
+== Delete Alarm (Edit Mode) ==
+
+User -> UI : tap red trash icon
+UI -> UI : show confirmation dialog
+User -> UI : confirm delete
+UI -> VM : delete()
+VM -> Repo : delete([alarmId])
+Repo --> VM : Unit
+VM --> UI : navigate back to Home
+
+== Review AI Draft ==
+
+UI -> VM : loadDraft(aiDraft: AlarmDraft)
+note right : AI-generated draft pre-fills\nall fields for user review
+VM --> UI : StateFlow<AlarmDraft>
+User -> UI : review & modify, then tap Save
+
+@enduml

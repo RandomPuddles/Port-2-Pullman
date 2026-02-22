@@ -1,0 +1,107 @@
+@startuml Alarm Engine – Sequence Diagram
+title Alarm Engine · Key Sequences
+
+skinparam defaultFontName Roboto
+skinparam defaultFontSize 12
+skinparam backgroundColor #FAFCFA
+skinparam sequenceArrowColor #37474F
+skinparam sequenceLifeLineBorderColor #2E7D32
+
+participant "Android OS" as OS
+participant "AlarmEvaluatorService" as Svc
+participant "IAlarmRepository" as Repo
+participant "ConditionEvaluator\n(strategy)" as Eval
+participant "ExternalDataFetcher" as Fetcher
+participant "NotificationController" as Notif
+
+== Service Lifecycle ==
+
+OS -> Svc : onCreate()
+Svc -> Svc : startForeground(notification)
+Svc -> Svc : create SupervisorScope
+Svc -> Repo : getAll()
+Repo --> Svc : Flow<List<Alarm>>
+note right : Filters to enabled alarms.\nLaunches a coroutine per alarm.
+
+== Evaluation Loop (per alarm) ==
+
+loop every alarm.refreshInterval
+  Svc -> Svc : evaluateAlarm(alarm)
+
+  loop each condition in alarm.conditions
+    Svc -> Eval : evaluate(condition)
+    activate Eval
+
+    alt Weather / Location / Custom
+      Eval -> Fetcher : fetchWeather() or fetchLocation()
+      activate Fetcher
+      Fetcher -> Fetcher : check cache
+      alt cache valid
+        Fetcher --> Eval : cached data
+      else cache expired
+        Fetcher -> Fetcher : Ktor GET (API)
+        Fetcher -> Fetcher : update cache
+        Fetcher --> Eval : fresh data
+      end
+      deactivate Fetcher
+    else Device
+      Eval -> Eval : BatteryManager / system query
+    else Time / Schedule
+      Eval -> Eval : check system clock
+    end
+
+    Eval --> Svc : Boolean (condition met?)
+    deactivate Eval
+  end
+
+  Svc -> Svc : combine results with\nAND / OR operators
+end
+
+== Alarm Triggered ==
+
+alt all conditions met (AND) / any met (OR)
+  Svc -> Svc : handleTrigger(alarm)
+
+  alt alarm.ring == true
+    Svc -> Notif : showRing(alarm)
+    Notif -> Notif : MediaPlayer.start()\nloop until dismissed
+  end
+
+  alt alarm.readout == true
+    Svc -> Notif : showReadout(alarm)
+    Notif -> Notif : TextToSpeech.speak(alarm.title)
+    note right : If Ring is also on, TTS\nplays after Ring is dismissed
+  end
+
+  alt neither ring nor readout
+    Svc -> Notif : showPing(alarm)
+    Notif -> Notif : silent notification
+  end
+
+  alt alarm.triggerOnce == true
+    Svc -> Repo : setEnabled([alarm.id], false)
+    Repo --> Svc : Unit
+    note right : Auto-disable alarm.\nCoroutine for this alarm is cancelled.
+  end
+end
+
+== Dismiss Notification ==
+
+OS -> Notif : PendingIntent → dismiss(alarmId)
+Notif -> Notif : MediaPlayer.stop()
+Notif -> Notif : cancel notification
+
+== Alarm List Change (reactive) ==
+
+Repo --> Svc : Flow emits updated list
+Svc -> Svc : diff enabled alarms
+Svc -> Svc : cancel removed / disabled
+Svc -> Svc : launch new eval loops
+
+== Service Shutdown ==
+
+OS -> Svc : onDestroy()
+Svc -> Svc : scope.cancel()
+Svc -> Notif : dismiss all
+
+@enduml

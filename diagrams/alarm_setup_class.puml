@@ -1,0 +1,107 @@
+@startuml Alarm Setup – Class Diagram
+title Alarm Setup · Class Diagram
+
+skinparam defaultFontName Roboto
+skinparam defaultFontSize 12
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FAFCFA
+
+skinparam class {
+  BackgroundColor #E8F5E9
+  BorderColor     #2E7D32
+  HeaderBackgroundColor #C8E6C9
+}
+
+' ───────────────────────────────────
+'  Composable Screen
+' ───────────────────────────────────
+
+class SetupScreen <<@Composable>> {
+  ' UI state
+  - draft : AlarmDraft
+  - isEditMode : Boolean
+  ' Actions
+  + onTitleChange(title: String)
+  + onAddConditionClick()
+  + onRemoveCondition(index: Int)
+  + onReorderConditions(from: Int, to: Int)
+  + onSetBoolOperator(index: Int, op: Operator)
+  + onSetNumericalValue(index: Int, value: Any)
+  + onToggleReadout(on: Boolean)
+  + onToggleRing(on: Boolean)
+  + onToggleTriggerOnce(on: Boolean)
+  + onSave()
+  + onDelete()
+}
+
+' ───────────────────────────────────
+'  ViewModel
+' ───────────────────────────────────
+
+class SetupViewModel {
+  - repo : IAlarmRepository
+  --
+  + draft : StateFlow<AlarmDraft>
+  + isEditMode : StateFlow<Boolean>
+  --
+  + loadAlarm(id: Long)
+  + loadDraft(draft: AlarmDraft)
+  + updateTitle(title: String)
+  + addCondition(c: Condition)
+  + removeCondition(index: Int)
+  + reorderConditions(from: Int, to: Int)
+  + setOperator(index: Int, op: Operator)
+  + setNumericalValue(index: Int, value: Any)
+  + setReadout(on: Boolean)
+  + setRing(on: Boolean)
+  + setTriggerOnce(on: Boolean)
+  + save(): Long
+  + delete()
+}
+
+' ───────────────────────────────────
+'  Interface (external)
+' ───────────────────────────────────
+
+interface IAlarmRepository <<interface>> {
+  + getById(id: Long): Flow<Alarm?>
+  + upsert(alarm: Alarm): suspend Long
+  + delete(ids: List<Long>): suspend Unit
+}
+
+' ───────────────────────────────────
+'  Models (shared)
+' ───────────────────────────────────
+
+class AlarmDraft <<data class>> {
+  + title : String
+  + conditions : List<Condition>
+  + operators : List<Operator>
+  + readout : Boolean
+  + ring : Boolean
+  + triggerOnce : Boolean
+}
+
+class Condition <<data class>> {
+  + category : String
+  + type : String
+  + label : String
+  + value : Any?
+}
+
+enum Operator {
+  AND
+  OR
+}
+
+' ───────────────────────────────────
+'  Relationships
+' ───────────────────────────────────
+
+SetupScreen --> SetupViewModel : observes StateFlow
+SetupViewModel --> IAlarmRepository : save · load · delete
+SetupViewModel ..> AlarmDraft : manages
+AlarmDraft o-- "0..*" Condition : ordered list
+AlarmDraft o-- "0..*" Operator : between conditions
+
+@enduml

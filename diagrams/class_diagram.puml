@@ -1,0 +1,87 @@
+@startuml Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Roboto
+skinparam defaultFontSize 12
+
+' ───────────────────────────────────
+'  Views
+' ───────────────────────────────────
+
+class AlarmMenuView {
+  + items : List<AlarmTile>
+  --
+  + selectReminder(AlarmTile) : AlarmOptionsView
+  + createAlarm(AlarmTile) : AlarmOptionsView
+  + deleteReminder(Alarm) : void
+}
+
+class AlarmTile {
+  + title : String
+  + alarm : AlarmOptionsView
+  --
+  + getAlarmOptionView() : AlarmOptionsView
+}
+
+class AlarmOptionsView {
+  + conditions : List<ConditionTile>
+  + voiceOutputOn : boolean
+  + ringingOn : boolean
+  + triggerOnceOn : boolean
+  --
+  + setVoiceOut(boolean) : void
+  + setRinging(boolean) : void
+  + setTriggerOnce(boolean) : void
+  + enableCondition(boolean) : void
+}
+
+class ConditionTile {
+  + condition : Condition
+  + conditionView : ConditionView
+  --
+  + drawTile(ConditionView) : void
+}
+
+' ───────────────────────────────────
+'  Condition Hierarchy (Composite Pattern)
+' ───────────────────────────────────
+
+class Condition {
+  + getCondition() : boolean
+}
+
+class LeafCondition {
+  + apiManager : ConcreteAPI
+  --
+  + getCondition() : boolean
+}
+
+class CompositeCondition {
+  + getCondition() : boolean
+}
+
+class ConcreteLeafCondition {
+  + apiManager : ConcreteAPI
+  --
+  + getCondition() : boolean
+}
+
+class ConcreteAPI {
+}
+
+' ───────────────────────────────────
+'  Relationships
+' ───────────────────────────────────
+
+AlarmMenuView ..> AlarmTile : Use
+AlarmMenuView --> AlarmOptionsView
+AlarmOptionsView ..> ConditionTile : Use
+ConditionTile ..> Condition : Use
+
+Condition <|-- LeafCondition : extends
+Condition <|-- CompositeCondition : extends
+CompositeCondition --> Condition : uses
+LeafCondition <|-- ConcreteLeafCondition : extends
+ConcreteLeafCondition --> ConcreteAPI : uses
+
+@enduml
