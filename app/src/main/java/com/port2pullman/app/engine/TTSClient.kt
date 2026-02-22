@@ -2,6 +2,7 @@ package com.port2pullman.app.engine
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import com.port2pullman.app.BuildConfig
 import com.port2pullman.app.debug.DebugLog
@@ -167,6 +168,16 @@ class TTSClient(private val context: Context) {
      */
     private fun playAudio(file: File) {
         stop() // Release any previous player
+
+        // Max out the alarm stream volume so TTS is as loud as possible
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVol, 0)
+            DebugLog.d(TAG, "Alarm volume set to max ($maxVol)")
+        } catch (e: Exception) {
+            DebugLog.w(TAG, "Could not set alarm volume: ${e.message}")
+        }
 
         try {
             mediaPlayer = MediaPlayer().apply {
