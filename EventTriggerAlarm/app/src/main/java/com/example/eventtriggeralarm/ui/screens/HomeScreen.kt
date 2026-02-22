@@ -163,7 +163,7 @@ private fun NormalTopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "Conditional Alarms",
+            "Eventually",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.weight(1f),
             maxLines = 1,
