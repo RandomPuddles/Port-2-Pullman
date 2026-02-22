@@ -11,5 +11,5 @@ abstract class LeafCondition(
 ) : Condition {
 
     override abstract val label: String
-    override abstract suspend fun getCondition(): Boolean
+    override abstract suspend fun getCondition(skipCustom: Boolean): Boolean
 }

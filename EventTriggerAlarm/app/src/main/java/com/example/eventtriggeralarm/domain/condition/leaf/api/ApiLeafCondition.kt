@@ -61,7 +61,7 @@ abstract class ApiLeafCondition(
 
     abstract suspend fun fetchData(): Map<String, Any?>
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
         return try {
             val data = fetchData()
             evaluate(data)

@@ -19,7 +19,7 @@ data class BatteryCondition(
     override val label: String
         get() = "Battery ${operator.symbol} $threshold%"
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager ?: return false
         val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         return compare(level, operator, threshold.toString())

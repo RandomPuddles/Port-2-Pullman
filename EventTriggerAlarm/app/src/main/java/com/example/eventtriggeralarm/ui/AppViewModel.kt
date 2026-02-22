@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eventtriggeralarm.data.Alarm
+import com.example.eventtriggeralarm.data.AlarmRepository
 import com.example.eventtriggeralarm.data.ConditionItem
 import com.example.eventtriggeralarm.data.RefreshFreq
 import com.example.eventtriggeralarm.domain.condition.TreeBuilder
@@ -33,18 +34,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun evaluateEnabledAlarms() {
-        val alarms = _state.value.alarms
-        if (alarms.isEmpty()) return
+        val state = _state.value
+        if (state.alarms.isEmpty()) return
+        if (state.showTriggeredDialog) return
 
         val context = getApplication<Application>().applicationContext
-        for (alarm in alarms) {
+        for (alarm in state.alarms) {
             if (!alarm.enabled) continue
             if (alarm.conditions.isEmpty()) continue
-
-            val alreadyShowing = _state.value.showTriggeredDialog &&
-                _state.value.triggeredAlarm?.title == alarm.title
-
-            if (alreadyShowing) continue
 
             val satisfied = withContext(Dispatchers.IO) {
                 runCatching {
@@ -54,12 +51,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         context = context,
                         geminiEvaluator = geminiEvaluator
                     )
-                    tree.getCondition()
+                    val hasCustom = alarm.conditions.any { it.custom }
+                    if (hasCustom) {
+                        val phase1 = tree.getCondition(skipCustom = true)
+                        if (!phase1) false else tree.getCondition(skipCustom = false)
+                    } else {
+                        tree.getCondition(skipCustom = false)
+                    }
                 }.getOrElse { false }
             }
 
             if (satisfied) {
                 showTriggeredDemo(alarm)
+                return
             }
         }
     }

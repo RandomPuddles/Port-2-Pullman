@@ -25,7 +25,7 @@ data class LocationCondition(
     override val label: String
         get() = "Location ${mode.name.lowercase()} ${radiusMeters.toInt()}m radius"
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
         val client = LocationServices.getFusedLocationProviderClient(context)
         val location = suspendCancellableCoroutine<Location?> { cont ->
             client.lastLocation

@@ -7,5 +7,9 @@ package com.example.eventtriggeralarm.domain.condition
 sealed interface Condition {
     val id: String
     val label: String
-    suspend fun getCondition(): Boolean
+    /**
+     * @param skipCustom When true, CustomCondition returns true without calling the LLM.
+     * Used for Phase 1: check if non-custom conditions would pass before invoking Gemini.
+     */
+    suspend fun getCondition(skipCustom: Boolean = false): Boolean
 }

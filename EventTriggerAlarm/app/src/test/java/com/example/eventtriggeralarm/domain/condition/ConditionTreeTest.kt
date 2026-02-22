@@ -11,7 +11,7 @@ class ConditionTreeTest {
     @Test
     fun emptyComposite_returnsFalse() = runBlocking {
         val root = CompositeCondition(operator = LogicalOperator.AND)
-        assertFalse(root.getCondition())
+        assertFalse(root.getCondition(skipCustom = false))
     }
 
     @Test
@@ -19,7 +19,7 @@ class ConditionTreeTest {
         val root = CompositeCondition(operator = LogicalOperator.AND).apply {
             add(StubLeafCondition(label = "A", result = true))
         }
-        assertTrue(root.getCondition())
+        assertTrue(root.getCondition(skipCustom = false))
     }
 
     @Test
@@ -28,7 +28,7 @@ class ConditionTreeTest {
             add(StubLeafCondition(label = "A", result = true))
             add(StubLeafCondition(label = "B", result = true))
         }
-        assertTrue(root.getCondition())
+        assertTrue(root.getCondition(skipCustom = false))
     }
 
     @Test
@@ -37,7 +37,7 @@ class ConditionTreeTest {
             add(StubLeafCondition(label = "A", result = true))
             add(StubLeafCondition(label = "B", result = false))
         }
-        assertFalse(root.getCondition())
+        assertFalse(root.getCondition(skipCustom = false))
     }
 
     @Test
@@ -46,7 +46,7 @@ class ConditionTreeTest {
             add(StubLeafCondition(label = "A", result = false))
             add(StubLeafCondition(label = "B", result = true))
         }
-        assertTrue(root.getCondition())
+        assertTrue(root.getCondition(skipCustom = false))
     }
 
     @Test
@@ -55,7 +55,7 @@ class ConditionTreeTest {
             add(StubLeafCondition(label = "A", result = false))
             add(StubLeafCondition(label = "B", result = false))
         }
-        assertFalse(root.getCondition())
+        assertFalse(root.getCondition(skipCustom = false))
     }
 
     @Test
@@ -75,6 +75,6 @@ class ConditionTreeTest {
                 }
             )
         }
-        assertTrue(root.getCondition())
+        assertTrue(root.getCondition(skipCustom = false))
     }
 }

@@ -28,7 +28,7 @@ data class TimeCondition(
             TimeMode.DAY_OF_WEEK -> "Day of week in $daysOfWeek"
         }
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
         val cal = Calendar.getInstance()
         return when (mode) {
             TimeMode.IN_RANGE, TimeMode.OUT_OF_RANGE -> {

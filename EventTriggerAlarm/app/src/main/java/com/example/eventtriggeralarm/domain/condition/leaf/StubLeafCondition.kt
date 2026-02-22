@@ -13,5 +13,5 @@ data class StubLeafCondition(
     private val result: Boolean = false
 ) : LeafCondition(id) {
 
-    override suspend fun getCondition(): Boolean = result
+    override suspend fun getCondition(skipCustom: Boolean): Boolean = result
 }

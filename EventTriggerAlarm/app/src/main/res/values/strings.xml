@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">EventTriggerAlarm</string>
+    <string name="notification_channel_alarms">Alarms</string>
+    <string name="notification_channel_alarms_desc">Alarm notifications when conditions are met</string>
 </resources>

@@ -22,7 +22,7 @@ data class CalendarCondition(
     override val label: String
         get() = "Calendar: ${mode.name.replace('_', ' ').lowercase()} in next ${windowMinutes}min"
 
-    override suspend fun getCondition(): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val windowEnd = now + (windowMinutes * 60 * 1000L)
 

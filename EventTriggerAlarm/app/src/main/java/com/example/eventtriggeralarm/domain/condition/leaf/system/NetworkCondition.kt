@@ -20,7 +20,7 @@ data class NetworkCondition(
     override val label: String
         get() = "Network is ${expectedState.name.lowercase().replace('_', ' ')}"
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val network = cm.activeNetwork ?: return expectedState == NetworkState.DISCONNECTED
         val caps = cm.getNetworkCapabilities(network) ?: return false

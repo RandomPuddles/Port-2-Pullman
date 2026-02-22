@@ -21,7 +21,8 @@ data class CustomCondition(
     override val label: String
         get() = "AI: \"${prompt.take(40)}${if (prompt.length > 40) "…" else ""}\""
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
+        if (skipCustom) return true // Phase 1: treat as true to avoid LLM call
         return geminiEvaluator.evaluate(prompt)
     }
 }

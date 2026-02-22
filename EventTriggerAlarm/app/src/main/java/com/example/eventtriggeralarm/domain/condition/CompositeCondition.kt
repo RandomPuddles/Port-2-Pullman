@@ -15,11 +15,11 @@ data class CompositeCondition(
     override val label: String
         get() = children.joinToString(" ${operator.name} ") { it.label }
 
-    override suspend fun getCondition(): Boolean {
+    override suspend fun getCondition(skipCustom: Boolean): Boolean {
         if (children.isEmpty()) return false
         return when (operator) {
-            LogicalOperator.AND -> children.all { it.getCondition() }
-            LogicalOperator.OR -> children.any { it.getCondition() }
+            LogicalOperator.AND -> children.all { it.getCondition(skipCustom) }
+            LogicalOperator.OR -> children.any { it.getCondition(skipCustom) }
         }
     }
 
