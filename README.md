@@ -2,7 +2,7 @@
 
 ## Description
 
-**Conditional Alarms** — a submission for the [Crimson Code Hackathon](https://crimsoncodehackathon.com), themed **"Reinventing the Wheel"**.
+**Conditional Alarms** — a submission for the Crimson Code Hackathon, themed **"Reinventing the Wheel"**.
 
 We reinvented the alarm app. Traditional alarms are triggered by time alone. Our app allows alarms to be triggered by a combination of conditions — including **weather**, **location**, and **device attributes**. Each condition can be mixed and matched, and when the combined result evaluates to `true`, the alarm fires.
 
