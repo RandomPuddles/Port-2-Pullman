@@ -51,21 +51,25 @@ We reinvented the alarm app. Traditional alarms are triggered by time alone. Our
 > Requires Android Studio and Android SDK (API 34+).
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/RandomPuddles/Port-2-Pullman.git
    cd Port-2-Pullman
    ```
 
 2. Create a `secrets.properties` file in the project root:
+
    ```
    GEMINI_API_KEY=your_gemini_api_key_here
    ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
    ```
+
    > You can leave the values blank to build without AI/TTS features.
 
 3. Connect a physical device via USB (with USB Debugging enabled) **or** start an Android emulator
 
 4. Build and install:
+
    ```bash
    ./gradlew installDebug
    ```
