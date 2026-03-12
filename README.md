@@ -82,24 +82,24 @@ We reinvented the alarm app. Traditional alarms are triggered by time alone. Our
 
 ### Screenshots
 
-![Main Screen](ReadMeImages/MainScreenImage.png)  
+![Main Screen](Documentation_and_Diagrams/ReadMeImages/MainScreenImage.png)  
 Main Screen Screenshot
 
-![Edit Alarm](ReadMeImages/EditAlarmImage.png)  
+![Edit Alarm](Documentation_and_Diagrams/ReadMeImages/EditAlarmImage.png)  
 Edit Alarm Screenshot
 
 ### Proof of Participation
 
-![Everett Room](ReadMeImages/EverettRoom.jpg)
+![Everett Room](Documentation_and_Diagrams/ReadMeImages/EverettRoom.jpg)
 Our Everett Reserved Room!
 
-![Day1](ReadMeImages/Day1Picture.jpg)
+![Day1](Documentation_and_Diagrams/ReadMeImages/Day1Picture.jpg)
 First few hours into the Hackathon
 
-![Day2](ReadMeImages/Day2Picture.jpg)
+![Day2](Documentation_and_Diagrams/ReadMeImages/Day2Picture.jpg)
 ~12 hours into the Hackathon
 
-![PlanningDiagrams](ReadMeImages/LotsOfDiagrams.jpg)
+![PlanningDiagrams](Documentation_and_Diagrams/ReadMeImages/LotsOfDiagrams.jpg)
 Trying to not lose it.
 
 ---
