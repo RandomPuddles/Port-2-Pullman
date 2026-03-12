@@ -2,7 +2,7 @@
 
 ## Description
 
-**Conditional Alarms** — a submission for the Crimson Code Hackathon, themed **"Reinventing the Wheel"**.
+**Conditional Alarms (Eventually)** — a submission for the Crimson Code Hackathon, themed **"Reinventing the Wheel"**.
 
 We reinvented the alarm app. Traditional alarms are triggered by time alone. Our app allows alarms to be triggered by a combination of conditions — including **weather**, **location**, and **device attributes**. Each condition can be mixed and matched, and when the combined result evaluates to `true`, the alarm fires.
 
@@ -80,15 +80,27 @@ We reinvented the alarm app. Traditional alarms are triggered by time alone. Our
 
 ## Media
 
-### Proof of Participation
-
-<!-- Add hackathon participation proof images here -->
-<!-- Example: ![Hackathon Badge](images/hackathon-badge.png) -->
-
 ### Screenshots
 
-<!-- Add screenshots of the running app here -->
-<!-- Example: ![Home Screen](images/screenshot-home.png) -->
+![Main Screen](ReadMeImages/MainScreenImage.png)  
+Main Screen Screenshot
+
+![Edit Alarm](ReadMeImages/EditAlarmImage.png)  
+Edit Alarm Screenshot
+
+### Proof of Participation
+
+![Everett Room](ReadMeImages/EverettRoom.jpg)
+Our Everett Reserved Room!
+
+![Day1](ReadMeImages/Day1Picture.jpg)
+First few hours into the Hackathon
+
+![Day2](ReadMeImages/Day2Picture.jpg)
+~12 hours into the Hackathon
+
+![PlanningDiagrams](ReadMeImages/LotsOfDiagrams.jpg)
+Trying to not lose it.
 
 ---
 
@@ -96,16 +108,20 @@ We reinvented the alarm app. Traditional alarms are triggered by time alone. Our
 
 ### Activity Description
 
-<!-- Describe the hackathon activity, timeline, and overall experience -->
+The expectation for Crimson Code was to deliver a near-complete project that clearly fit the hackathon theme within a 24-hour window. Our team chose to reinvent the alarm app, moving beyond time-only triggers to a conditional model where alarms fire based on combinations of weather, location, and device attributes. The goal was a functional application that demonstrated the concept.
 
 ### Technical Decisions
 
-<!-- Explain key technical choices made during the project (architecture, libraries, trade-offs, etc.) -->
+Our most important technical decision was adopting an AI-augmented, planning-heavy workflow proposed by one of my teammates. Rather than jumping straight into code, we spent a great amount of time upfront creating structured planning materials that would be easy for AI models to read and work with.
+The process worked as follows: we first came up with use cases as a group, then fed them into an AI model to generate PlantUML use case diagrams. After reviewing and refining those diagrams together, they were used to prompt an AI model to produce an HTML, CSS, and JS prototype. The prototype was tuned together on a single machine to avoid merge conflicts, and once we were happy with it, all three files were passed into Claude Opus to kick off the actual codebase. From there, the team continued building and adjusting features through AI-assisted coding.
+The core idea behind this approach was that clear, structured planning materials give an AI model much better direction than loose prompts, leading to higher quality generated code with less back-and-forth.
 
 ### Contributions
 
-<!-- List each team member and what they contributed -->
+The project was built within a 4-person team. The workflow was heavily collective by design, with most work happening in a shared space using a pair programming style rather than split individual tasks. My contributions were focused in the planning phases: coming up with and refining use cases, reviewing the PlantUML diagrams to make sure the logic made sense, and adjusting the HTML prototype to match what we wanted the app to do.
+
 
 ### Quality Assessment
 
-<!-- Evaluate the quality of the final product — what works well, what doesn't, and what could be improved -->
+The approach was interesting and produced solid results. However, individual participation is hard to show clearly on its own, since the collective nature of the workflow means most of my effort went into shared decisions rather than individual outputs.
+If this were to be redone, a push for a setup that keeps the group planning phase but adds a clear point where work is split across individual machines. This would keep the benefit of everyone being on the same page, while also creating a clearer record of individual contributions and likely speeding up the coding phase. The positive of the workflow we used was that working on one machine reduced merge issues, and guarantee that everyone is on the same page, but became a bottleneck later on.
